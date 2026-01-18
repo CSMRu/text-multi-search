@@ -1,0 +1,499 @@
+/* Component Styles: Buttons, Inputs, Toasts, Loading Bar */
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background-color: transparent;
+    color: var(--text-main);
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+    font-size: 0.875rem;
+}
+
+.btn:hover {
+    background-color: var(--bg-app);
+    border-color: var(--text-muted);
+}
+
+.btn.active {
+    background-color: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+    box-shadow: inset var(--shadow-sm);
+}
+
+.btn.active:hover {
+    background-color: var(--primary-hover);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn.active,
+[data-theme="dark"] .btn.active:hover {
+    color: #000000;
+}
+
+/* Override inner element specificity to ensure active text color wins */
+.btn.active span,
+.btn.active i {
+    color: inherit !important;
+}
+
+/* Button Modifiers */
+.btn-primary {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    font-weight: 500;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+    color: white;
+}
+
+.btn-sm {
+    padding: 4px;
+    height: auto;
+    width: auto;
+}
+
+.btn-sm svg {
+    width: 20px;
+    height: 20px;
+}
+
+.btn-icon {
+    padding: 0.25rem 0.6rem;
+    width: auto;
+    height: 32px;
+}
+
+.btn-icon i,
+.btn-icon svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+.btn-text {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 0.4rem 0.6rem;
+    height: 100%;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+}
+
+.btn-text:hover {
+    background-color: var(--bg-app);
+    color: var(--primary);
+}
+
+/* Specific Button Overrides */
+
+
+#btn-theme {
+    padding: 0.5rem;
+}
+
+#btn-theme svg {
+    width: 20px;
+    height: 20px;
+    transition: transform 0.3s ease;
+}
+
+/* ==========================================================================
+   Panels
+   ========================================================================== */
+.panel {
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    contain: paint;
+    position: relative;
+}
+
+.panel-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--bg-panel);
+    position: relative;
+    /* For absolute centering option, though flex is used */
+}
+
+.header-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    /* Let clicks pass through if it overlaps bits of buttons */
+    max-width: 40%;
+}
+
+.file-name-display {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.panel-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Specific Header Fonts */
+.panel-header .header-left>span,
+.panel-header h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+/* ==========================================================================
+   Controls
+   ========================================================================== */
+/* Font Control Group */
+.font-control-group {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 2px;
+    background-color: transparent;
+}
+
+.font-control-group>span {
+    padding: 0 0.5rem;
+    font-size: 0.85rem;
+    min-width: 35px;
+    text-align: center;
+    /* Ensure numbers align vertically */
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ==========================================================================
+   Badges & Tags
+   ========================================================================== */
+/* Character Count Badge */
+.char-count {
+    font-family: 'Inter', sans-serif;
+    font-size: 12.8px !important;
+    font-weight: 600;
+    line-height: 1.6;
+    color: var(--primary) !important;
+    background-color: var(--bg-app);
+    padding: 4px 9.6px;
+    border-radius: var(--radius-pill);
+    border: none;
+    min-width: 100px;
+    text-align: center;
+    display: inline-block;
+}
+
+/* Version Tag */
+.version-tag {
+    font-size: 0.7rem;
+    font-weight: normal;
+    background-color: var(--primary);
+    color: var(--bg-app);
+    padding: 1px 4px;
+    border-radius: var(--radius-sm);
+    margin-left: 8px;
+    vertical-align: middle;
+    opacity: 0.9;
+}
+
+/* ==========================================================================
+   Components
+   ========================================================================== */
+/* Legend */
+.legend {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+}
+
+.legend-item::before {
+    content: '';
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 4px;
+    border-radius: 2px;
+}
+
+.legend-item.add::before {
+    background-color: var(--diff-add-text);
+}
+
+.legend-item.del::before {
+    background-color: var(--diff-del-text);
+}
+
+.legend-item.replace::before {
+    background-color: var(--diff-replace-text);
+}
+
+.legend-item.edited::before {
+    background-color: var(--diff-user-text);
+}
+
+/* Scroll Buttons */
+.scroll-buttons {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    display: grid;
+    grid-template-areas:
+        ". up ."
+        "left . right"
+        ". down .";
+    gap: 0;
+    z-index: var(--z-scroll-btn);
+}
+
+#btn-scroll-top {
+    grid-area: up;
+}
+
+#btn-prev-change {
+    grid-area: left;
+}
+
+#btn-next-change {
+    grid-area: right;
+}
+
+#btn-scroll-bottom {
+    grid-area: down;
+}
+
+.btn-scroll {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-full);
+    background-color: var(--primary);
+    border: none;
+    color: white;
+    box-shadow: var(--shadow-btn-scroll);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    opacity: 0.8;
+}
+
+.btn-scroll svg {
+    width: 24px;
+    height: 24px;
+}
+
+.btn-scroll:hover {
+    background-color: var(--primary-hover);
+    color: white;
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+    opacity: 1;
+}
+
+[data-theme="dark"] .btn-scroll {
+    color: black;
+}
+
+[data-theme="dark"] .btn-scroll:hover {
+    color: black;
+}
+
+/* Toast Notification */
+.toast-container {
+    position: fixed;
+    top: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: var(--z-toast);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: center;
+    pointer-events: none;
+}
+
+/* Tooltip Styles */
+.tooltip-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.help-trigger {
+    cursor: help;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tooltip-content {
+    visibility: hidden;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    background-color: var(--bg-panel);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.2s, visibility 0.2s, transform 0.2s;
+    transform: translateY(-5px);
+    text-align: left;
+    line-height: 1.5;
+}
+
+.tooltip-wrapper:hover .tooltip-content {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.tooltip-content b {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.toast {
+    --toast-accent: var(--text-primary);
+    background-color: var(--bg-panel);
+    color: var(--text-primary);
+    padding: 0.75rem 1.25rem;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--toast-accent);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 300px;
+    max-width: 90vw;
+    animation: slideDown 0.3s ease-out forwards;
+    pointer-events: auto;
+    font-size: 0.95rem;
+}
+
+.toast.toast-error {
+    --toast-accent: #ef4444;
+}
+
+.toast.toast-info {
+    --toast-accent: var(--primary);
+}
+
+.toast.toast-success {
+    --toast-accent: #22c55e;
+}
+
+.toast-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--toast-accent);
+}
+
+.toast.fade-out {
+    animation: fadeOut 0.3s ease-in forwards;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-1rem);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateY(-1rem);
+    }
+}
+
+/* Loading Bar */
+.loading-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(90deg, transparent 0%, var(--primary) 30%, var(--primary) 70%, transparent 100%);
+    background-size: 200% 100%;
+    z-index: var(--z-loading);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.loading-bar.active {
+    opacity: 1;
+    animation: loadingInfo 12s infinite linear;
+}
+
+@keyframes loadingInfo {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}

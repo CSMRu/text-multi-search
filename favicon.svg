@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2a2a2a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a1a1a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Base Container (Same as text-diff) -->
+  <rect x="0" y="0" width="64" height="64" rx="12" fill="url(#bg)" />
+  
+  <!-- Content: Multi Search Highlight Metaphor -->
+  <g transform="translate(14, 14)">
+    <!-- Line 1: Plain Text -->
+    <rect x="0" y="0" width="36" height="4" rx="2" fill="#4b5563" opacity="0.5" />
+    
+    <!-- Line 2: Multiple Hits (Search Match - Green) -->
+    <rect x="0" y="8" width="8" height="4" rx="2" fill="#10b981" opacity="0.9" />
+    <rect x="12" y="8" width="16" height="4" rx="2" fill="#4b5563" opacity="0.5" />
+    <rect x="32" y="8" width="8" height="4" rx="2" fill="#10b981" opacity="0.9" />
+    
+    <!-- Line 3: User Edit (Blue) -->
+    <rect x="0" y="16" width="14" height="4" rx="2" fill="#4b5563" opacity="0.5" />
+    <rect x="18" y="16" width="12" height="4" rx="2" fill="#3b82f6" opacity="0.9" /> <!-- Blue-500 -->
+    
+    <!-- Line 4: Replacement Hit (Orange for Replace) -->
+    <rect x="0" y="24" width="10" height="4" rx="2" fill="#4b5563" opacity="0.5" />
+    <rect x="14" y="24" width="20" height="4" rx="2" fill="#f97316" opacity="0.9" /> <!-- Orange-500 -->
+    
+    <!-- Line 5: Mixed Hits (Search & Blue) -->
+    <rect x="0" y="32" width="6" height="4" rx="2" fill="#10b981" opacity="0.9" />
+    <rect x="10" y="32" width="6" height="4" rx="2" fill="#4b5563" opacity="0.5" />
+    <rect x="20" y="32" width="14" height="4" rx="2" fill="#3b82f6" opacity="0.9" />
+  </g>
+</svg>

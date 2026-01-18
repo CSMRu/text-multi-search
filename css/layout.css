@@ -1,0 +1,201 @@
+/* ==========================================================================
+   Base Layout & Toolbar
+   ========================================================================== */
+.toolbar {
+    height: var(--toolbar-height);
+    background-color: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+    flex-shrink: 0;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.brand h1 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+}
+
+.controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.divider {
+    width: 1px;
+    height: 24px;
+    background-color: var(--border-color);
+    margin: 0 0.25rem;
+}
+
+/* ==========================================================================
+   Main Containers & Grid
+   ========================================================================== */
+.diff-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 0 1.5rem 1.5rem 1.5rem;
+    width: 100%;
+    min-width: 1200px;
+    margin: 0 auto;
+}
+
+.panel-group.inputs {
+    display: grid;
+    grid-template-columns: 2.5fr 1fr;
+    gap: 1.5rem;
+    height: 400px;
+}
+
+.inputs .panel {
+    height: 100%;
+}
+
+.panel.output-panel {
+    height: auto;
+    min-height: 80px;
+}
+
+.header-left,
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.header-actions {
+    gap: 0.75rem;
+}
+
+/* ==========================================================================
+   Input Areas & Drag Drop
+   ========================================================================== */
+.input-wrapper {
+    /* Context for absolute positioning of drop-overlay */
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
+textarea {
+    flex: 1;
+    width: 100%;
+    resize: none;
+    border: none;
+    padding: 1rem;
+    background-color: transparent;
+    color: var(--text-main);
+    font-family: 'Consolas', 'Monaco', 'Courier New', 'Noto Sans JP', monospace;
+    font-size: var(--font-size-base);
+    outline: none;
+    line-height: 1.5;
+}
+
+/* Drag Overlay */
+.drop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    background: var(--drop-overlay-bg);
+    z-index: var(--z-drop-overlay);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    border-radius: inherit;
+}
+
+.input-wrapper.drag-active .drop-overlay {
+    opacity: 1;
+}
+
+.drop-icon {
+    width: 120px;
+    height: 120px;
+    color: var(--primary);
+    margin-bottom: 1rem;
+}
+
+.drop-text {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+/* ==========================================================================
+   Output & Diff Styling
+   ========================================================================== */
+.diff-content {
+    padding: 1rem;
+    font-family: 'Consolas', 'Monaco', 'Courier New', 'Noto Sans JP', monospace;
+    font-size: var(--font-size-base);
+    white-space: pre-wrap;
+    line-height: 1.5;
+    overflow: visible;
+    content-visibility: auto;
+    contain-intrinsic-size: 1000px;
+    contain: layout paint style;
+}
+
+/* Diff Logic Colors (With Importance for Edit Mode) */
+.diff-add {
+    background-color: var(--diff-add-bg);
+    color: var(--diff-add-text) !important;
+    text-decoration: none;
+}
+
+.diff-replace {
+    background-color: var(--diff-replace-bg);
+    color: var(--diff-replace-text) !important;
+    text-decoration: none;
+}
+
+.diff-original {
+    color: var(--text-main) !important;
+}
+
+/* Editable Behavior */
+.diff-content[contenteditable="true"] {
+    color: var(--diff-user-text);
+    background-color: var(--bg-app);
+}
+
+.diff-gap {
+    color: var(--diff-user-text);
+}
+
+/* ==========================================================================
+   Responsive Design
+   ========================================================================== */
+@media (max-width: 768px) {
+    .panel-group.inputs {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+
+    .inputs .panel {
+        min-height: 300px;
+    }
+
+    .diff-container {
+        padding: 1rem;
+    }
+}
