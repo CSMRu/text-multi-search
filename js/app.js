@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const CONFIG = {
-        MAX_FILE_SIZE: 2 * 1024 * 1024, // 2MB
+        MAX_FILE_SIZE: 1 * 1024 * 1024, // 1MB
         DEBOUNCE_DELAY: 150,
         HISTORY_DEBOUNCE: 400
     };
@@ -463,9 +463,22 @@ document.addEventListener('DOMContentLoaded', () => {
     /* --- File & Drag/Drop Module --- */
     function readFileContent(file, callback) {
         if (file.size > CONFIG.MAX_FILE_SIZE) {
-            showToast(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max: 2MB`);
+            showToast(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max: 1MB`);
             return;
         }
+
+        // Check for common non-text types (Media, PDF, Archives)
+        const isMedia = file.type.startsWith('image/') ||
+            file.type.startsWith('video/') ||
+            file.type.startsWith('audio/') ||
+            file.type === 'application/pdf' ||
+            file.type === 'application/zip';
+
+        if (isMedia) {
+            showToast('Only text format files are allowed.');
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = (e) => {
             callback(e.target.result);
