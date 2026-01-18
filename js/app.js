@@ -238,12 +238,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 let regex;
-                if (search === '[num]') {
-                    regex = /\d+/g;
-                } else if (STATE.isRegexMode && search.startsWith('/') && search.endsWith('/') && search.length > 2) {
+                if (STATE.isRegexMode && search.startsWith('/') && search.endsWith('/') && search.length > 2) {
                     regex = new RegExp(search.slice(1, -1), 'g');
                 } else {
-                    regex = new RegExp(escapeRegExp(search), 'g');
+                    // Smart Wildcard: Replace [num] with \d+ anywhere in the string
+                    // 1. Escape the base string to treat special chars (like dots/brackets) literally
+                    let pattern = escapeRegExp(search);
+                    // 2. Identify the escaped sequence for [num] (which is \[num\]) and replace with digit matcher
+                    pattern = pattern.replace(/\\\[num\\\]/g, '\\d+');
+                    regex = new RegExp(pattern, 'g');
                 }
                 matchers.push({ regex, searchStr: search, replace, isReplacement });
             } catch (e) {
