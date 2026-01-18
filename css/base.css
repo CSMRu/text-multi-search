@@ -39,9 +39,9 @@
     /* Overlay */
     --drop-overlay-bg: rgba(255, 255, 255, 0.9);
 
-    /* Layout */
+    /* Layout & Settings */
     --toolbar-height: 80px;
-    --font-size-base: 16px;
+    --font-size-base: 18.66px;
 
     /* Z-Index Hierarchy */
     --z-drop-overlay: 20;
