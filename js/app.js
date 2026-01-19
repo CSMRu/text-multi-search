@@ -613,8 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSyntaxHighlighting();
 
     if (EL.uploadSource) EL.uploadSource.addEventListener('change', () => handleFileUpload(EL.uploadSource, EL.sourceInput, EL.fileNameSource));
-    if (EL.uploadKeywords) EL.uploadKeywords.addEventListener('change', () => {
-    });
+    if (EL.uploadKeywords) EL.uploadKeywords.addEventListener('change', () => handleFileUpload(EL.uploadKeywords, EL.keywordsInput, EL.fileNameKeywords));
 
     // --- Toolbar Buttons ---
     EL.btnTheme.addEventListener('click', toggleTheme);
