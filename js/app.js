@@ -614,19 +614,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (EL.uploadSource) EL.uploadSource.addEventListener('change', () => handleFileUpload(EL.uploadSource, EL.sourceInput, EL.fileNameSource));
     if (EL.uploadKeywords) EL.uploadKeywords.addEventListener('change', () => {
-        handleFileUpload(EL.uploadKeywords, EL.keywordsInput, EL.fileNameKeywords);
-        // We need to wait for file read to complete. 
-        // handleFileUpload uses a callback but doesn't expose it here easily.
-        // However, handleFileUpload sets value then triggers... wait, it doesn't trigger input event automatically unless dispatched.
-        // It sets value directly: textAreaElement.value = text;
-        // In handleFileUpload, we should trigger sync. Let's patch handleFileUpload instead of here?
-        // Or just observe mutation? No.
-        // Let's modify handleFileUpload instead or just rely on the fact that handleFileUpload modifies the element.
-        // Actually, looking at handleFileUpload logic:
-        // inner: callback(e.target.result);
-        // callback: textAreaElement.value = text;
-        // It does NOT dispatch input event.
-        // So I also need to update handleFileUpload to call syncBackdrop if it's the keywords input.
     });
 
     // --- Toolbar Buttons ---
