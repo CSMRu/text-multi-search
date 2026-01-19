@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const STATE = {
-        fontSize: 14,        // Current font size in pt
+        fontSize: 12,        // Current font size in pt
         isSynced: true,      // True if searching, False if editing manually
         isRegexMode: false,  // True if /regex/ patterns are enabled
         isKeywordsDirty: true,
