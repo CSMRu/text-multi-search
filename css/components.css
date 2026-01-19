@@ -154,7 +154,6 @@ textarea {
     line-height: 1.5;
     white-space: pre-wrap;
     word-wrap: break-word;
-    /* Must match textarea wrapping */
     overflow: hidden;
     pointer-events: none;
     color: var(--text-main);
@@ -162,7 +161,6 @@ textarea {
     background-color: transparent;
     text-align: left;
     box-sizing: border-box;
-    /* Match textarea box model */
 }
 
 /* Ensure textarea sits on top and text is transparent */
@@ -184,7 +182,6 @@ textarea {
 
 .textarea-backdrop .comment {
     color: var(--syntax-comment);
-    /* Theme-aware green */
 }
 
 /* Drag Overlay */
@@ -640,6 +637,7 @@ textarea {
     background-color: var(--bg-app);
 }
 
-.diff-gap {
+/* User-Edited Text Style */
+.diff-user {
     color: var(--diff-user-text);
 }

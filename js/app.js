@@ -99,6 +99,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }, CONFIG.DEBOUNCE_DELAY);
     }
 
+    // Check if element is a styled diff span (add, replace, or original)
+    const isStyledSpan = (el) => el && (
+        el.classList.contains('diff-add') ||
+        el.classList.contains('diff-replace') ||
+        el.classList.contains('diff-original')
+    );
+
     // Calculates global character offset relative to container, handling nested nodes
     // Essential for tracking cursor position across contenteditable updates
     function getCursorOffset(container) {
@@ -208,8 +215,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (window.lucide) window.lucide.createIcons();
         }
     }
-
-
 
 
     /* ==========================================================================
@@ -409,7 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /* --- Editor Handling Module --- */
+    // Wrap newly typed characters in diff-user span when inside styled span
     function wrapLastChars(length) {
         if (!length) return;
         const sel = window.getSelection();
@@ -417,55 +422,68 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const range = sel.getRangeAt(0);
         const node = range.startContainer;
-
         if (node.nodeType !== Node.TEXT_NODE) return;
+
         const parent = node.parentElement;
         if (!parent || !EL.outputDiv.contains(parent)) return;
+        if (!isStyledSpan(parent)) return;
 
-        if (parent.classList.contains('diff-original') ||
-            parent.classList.contains('diff-add') ||
-            parent.classList.contains('diff-replace')) {
+        const endOffset = range.startOffset;
+        const startOffset = endOffset - length;
+        if (startOffset < 0) return;
 
-            const endOffset = range.startOffset;
-            const startOffset = endOffset - length;
-            if (startOffset < 0) return;
+        try {
+            const textToWrap = node.splitText(startOffset);
+            const textAfter = textToWrap.splitText(length);
 
-            try {
-                // Split Parent Logic to prevent nested styles
-                const textNode = node;
-                const textToWrap = textNode.splitText(startOffset);
-                const textAfter = textToWrap.splitText(length);
-
-                const parentClone = parent.cloneNode(false);
-
-                // Move textAfter and any subsequent siblings to clone
-                parentClone.appendChild(textAfter);
-                while (textAfter.nextSibling) {
-                    parentClone.appendChild(textAfter.nextSibling);
-                }
-
-                const newSpan = document.createElement('span');
-                newSpan.className = 'diff-gap';
-                newSpan.appendChild(textToWrap);
-
-                // Insert into DOM: Parent -> NewSpan -> ParentClone
-                parent.after(parentClone);
-                parent.after(newSpan);
-
-                // Cleanup empty styled spans
-                if (!parent.textContent) parent.remove();
-                if (!parentClone.textContent) parentClone.remove();
-
-                // Restore Cursor
-                const cursorRange = document.createRange();
-                cursorRange.selectNodeContents(newSpan);
-                cursorRange.collapse(false);
-                sel.removeAllRanges();
-                sel.addRange(cursorRange);
-            } catch (e) {
-                console.error("Wrap failed", e);
+            const parentClone = parent.cloneNode(false);
+            parentClone.appendChild(textAfter);
+            while (textAfter.nextSibling) {
+                parentClone.appendChild(textAfter.nextSibling);
             }
+
+            const newSpan = document.createElement('span');
+            newSpan.className = 'diff-user';
+            newSpan.appendChild(textToWrap);
+
+            parent.after(parentClone);
+            parent.after(newSpan);
+
+            if (!parent.textContent) parent.remove();
+            if (!parentClone.textContent) parentClone.remove();
+
+            const cursorRange = document.createRange();
+            cursorRange.selectNodeContents(newSpan);
+            cursorRange.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(cursorRange);
+        } catch (e) {
+            console.error('wrapLastChars failed:', e);
         }
+    }
+
+    // Split styled span and insert content between the parts (used for Enter/Paste)
+    function splitAndInsert(range, contentSpan) {
+        const anchor = range.startContainer;
+        const parent = anchor.parentElement;
+
+        if (anchor.nodeType === Node.TEXT_NODE && isStyledSpan(parent)) {
+            const latterTextNode = anchor.splitText(range.startOffset);
+            const part2Span = parent.cloneNode(false);
+            part2Span.appendChild(latterTextNode);
+
+            while (latterTextNode.nextSibling) {
+                part2Span.appendChild(latterTextNode.nextSibling);
+            }
+
+            parent.after(part2Span);
+            parent.after(contentSpan);
+
+            if (!parent.textContent) parent.remove();
+            if (!part2Span.textContent) part2Span.remove();
+            return true;
+        }
+        return false;
     }
 
     /* --- File & Drag/Drop Module --- */
@@ -504,7 +522,6 @@ document.addEventListener('DOMContentLoaded', () => {
             inputElement.value = '';
             if (textAreaElement === EL.keywordsInput) {
                 STATE.isKeywordsDirty = true;
-                // Defer to ensure DOM update if needed, though value set is sync
                 setTimeout(syncBackdrop, 0);
             }
         });
@@ -518,22 +535,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const lines = text.split('\n');
 
         const stylizedLines = lines.map(line => {
-            // Check for comment start (starts with //), but render the full line including whitespace
             if (line.trim().startsWith('//')) {
                 return `<span class="comment">${escapeHtml(line)}</span>`;
             }
             return escapeHtml(line);
         });
 
-        // specific fix for trailing newlines in pre-wrap div
         let html = stylizedLines.join('\n');
-        if (text.endsWith('\n')) {
-            html += '<br>';
-        }
+        if (text.endsWith('\n')) html += '<br>';
 
         EL.keywordsBackdrop.innerHTML = html;
-
-        // Sync scroll immediately (e.g. paste)
         EL.keywordsBackdrop.scrollTop = EL.keywordsInput.scrollTop;
         EL.keywordsBackdrop.scrollLeft = EL.keywordsInput.scrollLeft;
     }
@@ -653,20 +664,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 EL.btnSyncToggle.innerHTML = '<i data-lucide="unlink"></i>';
                 EL.btnSyncToggle.title = "Relink to Sync (Resets Changes)";
 
-                // Add guards
-                const spans = EL.outputDiv.querySelectorAll('.diff-add, .diff-replace, .diff-original');
-                spans.forEach(span => {
-                    const mkGap = () => {
-                        const gap = document.createElement('span');
-                        gap.className = 'diff-gap';
-                        gap.textContent = '\u200B';
-                        return gap;
-                    };
-                    if (!span.previousSibling?.classList?.contains('diff-gap')) span.before(mkGap());
-                    if (!span.nextSibling?.classList?.contains('diff-gap')) span.after(mkGap());
-                });
-
-                // Init History (After guards are added)
+                // Init History
                 STATE.history.stack = [{ content: EL.outputDiv.innerHTML, cursor: 0 }];
                 STATE.history.pointer = 0;
             }
@@ -678,7 +676,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (EL.btnCopyResult) {
         EL.btnCopyResult.addEventListener('click', () => {
             if (!EL.outputDiv.textContent) return;
-            const textToCopy = EL.outputDiv.innerText.replace(/\u200B/g, '');
+            const textToCopy = EL.outputDiv.innerText;
             navigator.clipboard.writeText(textToCopy).then(() => {
                 showToast('Copied to clipboard!', 'success');
                 const originalIcon = EL.btnCopyResult.innerHTML;
@@ -695,7 +693,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (EL.btnDownloadResult) {
         EL.btnDownloadResult.addEventListener('click', () => {
             if (!EL.outputDiv.textContent) return;
-            const textToSave = EL.outputDiv.innerText.replace(/\u200B/g, '');
+            const textToSave = EL.outputDiv.innerText;
             const blob = new Blob([textToSave], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -733,173 +731,25 @@ document.addEventListener('DOMContentLoaded', () => {
         updateActionButtonsState();
     });
 
+
     EL.outputDiv.addEventListener('keydown', (e) => {
         if (STATE.isSynced) return;
 
         // Undo: Ctrl+Z
-        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') { e.preventDefault(); performUndo(); }
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+            e.preventDefault();
+            performUndo();
+            return;
+        }
+
         // Redo: Ctrl+Y or Ctrl+Shift+Z
-        if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); performRedo(); }
-
-        // Smart Navigation: Skip Zero-Width Spaces (\u200B) for Arrow Keys
-        if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
-            const sel = window.getSelection();
-            if (sel.rangeCount === 0) return;
-
-            const direction = e.key === 'ArrowLeft' ? 'backward' : 'forward';
-
-            // Save state to restore if needed
-            const anchorNode = sel.anchorNode;
-            const anchorOffset = sel.anchorOffset;
-            const focusNode = sel.focusNode;
-            const focusOffset = sel.focusOffset;
-            const isCollapsed = sel.isCollapsed;
-
-            try {
-                // Peek by extending selection 1 character
-                sel.modify('extend', direction, 'character');
-                const text = sel.toString();
-
-                if (text === '\u200B') {
-                    e.preventDefault();
-                    sel.modify('move', direction, 'character');
-                } else {
-                    // Restore original selection
-                    sel.collapse(anchorNode, anchorOffset);
-                    if (!isCollapsed) {
-                        sel.extend(focusNode, focusOffset);
-                    }
-                }
-            } catch (err) {
-                console.warn("Arrow nav fallback", err);
-                try {
-                    sel.collapse(anchorNode, anchorOffset);
-                    if (!isCollapsed) sel.extend(focusNode, focusOffset);
-                } catch (e) { }
-            }
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+            e.preventDefault();
+            performRedo();
+            return;
         }
 
-        // Smart Backspace: Skip Zero-Width Spaces (\u200B)
-        if (e.key === 'Backspace') {
-            const sel = window.getSelection();
-            if (sel.isCollapsed && sel.rangeCount > 0) {
-                const originalRange = sel.getRangeAt(0).cloneRange();
-                try {
-                    sel.modify('extend', 'backward', 'character');
-                    const text = sel.toString();
-
-                    if (text === '\u200B') {
-                        sel.modify('extend', 'backward', 'character');
-                        const range = sel.getRangeAt(0);
-
-                        // Check container before delete (to know what to cleanup)
-                        const container = range.startContainer;
-                        const parent = container.parentElement;
-
-                        range.deleteContents();
-                        e.preventDefault();
-
-                        // Cleanup Empty Styled Spans
-                        if (parent && (parent.classList.contains('diff-add') || parent.classList.contains('diff-replace') || parent.classList.contains('diff-original')) && !parent.textContent) {
-                            const prev = parent.previousSibling;
-                            const next = parent.nextSibling;
-                            const container = parent.parentElement;
-
-                            parent.remove();
-
-                            // Prefer prev, then next
-                            let target = prev || next;
-                            let collapseToStart = !prev; // if prev exists, collapse to end (false). if only next exists, start (true).
-
-                            if (!target) {
-                                // No siblings, create a new gap
-                                target = document.createElement('span');
-                                target.className = 'diff-gap';
-                                target.textContent = '\u200B';
-                                container.appendChild(target);
-                                collapseToStart = false;
-                            }
-
-                            const r = document.createRange();
-                            r.selectNodeContents(target);
-                            r.collapse(collapseToStart);
-                            sel.removeAllRanges();
-                            sel.addRange(r);
-                        }
-
-                        debouncedSaveHistory();
-                        updateActionButtonsState();
-                    } else {
-                        sel.removeAllRanges();
-                        sel.addRange(originalRange);
-                    }
-                } catch (err) {
-                    sel.removeAllRanges();
-                    sel.addRange(originalRange);
-                }
-            }
-        }
-
-        // Smart Delete (Forward): Skip Zero-Width Spaces (\u200B)
-        if (e.key === 'Delete') {
-            const sel = window.getSelection();
-            if (sel.isCollapsed && sel.rangeCount > 0) {
-                const originalRange = sel.getRangeAt(0).cloneRange();
-                try {
-                    sel.modify('extend', 'forward', 'character');
-                    const text = sel.toString();
-
-                    if (text === '\u200B') {
-                        sel.modify('extend', 'forward', 'character');
-                        const range = sel.getRangeAt(0);
-
-                        const container = range.startContainer;
-                        const parent = container.parentElement;
-
-                        range.deleteContents();
-                        e.preventDefault();
-
-                        // Cleanup Empty Styled Spans
-                        if (parent && (parent.classList.contains('diff-add') || parent.classList.contains('diff-replace') || parent.classList.contains('diff-original')) && !parent.textContent) {
-                            const prev = parent.previousSibling;
-                            const next = parent.nextSibling;
-                            const container = parent.parentElement;
-
-                            parent.remove();
-
-                            // For Delete (forward), prefer Next, then Prev
-                            let target = next || prev;
-                            let collapseToStart = !!next; // if next exists, start (true). if only prev, end (false).
-
-                            if (!target) {
-                                target = document.createElement('span');
-                                target.className = 'diff-gap';
-                                target.textContent = '\u200B';
-                                container.appendChild(target);
-                                collapseToStart = false;
-                            }
-
-                            const r = document.createRange();
-                            r.selectNodeContents(target);
-                            r.collapse(collapseToStart);
-                            sel.removeAllRanges();
-                            sel.addRange(r);
-                        }
-
-                        debouncedSaveHistory();
-                        updateActionButtonsState();
-                    } else {
-                        sel.removeAllRanges();
-                        sel.addRange(originalRange);
-                    }
-                } catch (err) {
-                    sel.removeAllRanges();
-                    sel.addRange(originalRange);
-                }
-            }
-        }
-
-        // Smart Enter: Split styled span to prevent inheritance & insert newline
+        // Enter: Insert newline, split styled span if needed
         if (e.key === 'Enter') {
             e.preventDefault();
             saveHistorySnapshot();
@@ -907,57 +757,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const sel = window.getSelection();
             if (!sel.rangeCount) return;
             const range = sel.getRangeAt(0);
-            range.deleteContents(); // delete selection if any
+            range.deleteContents();
 
-            const anchor = range.startContainer;
-            const parent = anchor.parentElement;
+            const newlineSpan = document.createElement('span');
+            newlineSpan.className = 'diff-user';
+            newlineSpan.textContent = '\n';
 
-            // Re-use splitting logic if inside styled span
-            if (anchor.nodeType === Node.TEXT_NODE &&
-                (parent.classList.contains('diff-add') ||
-                    parent.classList.contains('diff-replace') ||
-                    parent.classList.contains('diff-original'))) {
-
-                try {
-                    const latterTextNode = anchor.splitText(range.startOffset);
-                    const part2Span = parent.cloneNode(false);
-                    part2Span.appendChild(latterTextNode);
-                    while (latterTextNode.nextSibling) {
-                        part2Span.appendChild(latterTextNode.nextSibling);
-                    }
-
-                    parent.after(part2Span);
-
-                    // Insert newline in a gap span
-                    const span = document.createElement('span');
-                    span.className = 'diff-gap';
-                    span.textContent = '\n';
-                    parent.after(span);
-
-                    if (!parent.textContent) parent.remove();
-                    if (!part2Span.textContent) part2Span.remove();
-
-                    // Cursor placement
-                    const newRange = document.createRange();
-                    newRange.setStartAfter(span);
-                    newRange.collapse(true);
-                    sel.removeAllRanges();
-                    sel.addRange(newRange);
-
-                } catch (err) {
-                    console.error("Enter split failed", err);
-                }
-            } else {
-                // Normal enter
-                const span = document.createElement('span');
-                span.className = 'diff-gap';
-                span.textContent = '\n';
-                range.insertNode(span);
-                range.setStartAfter(span);
-                range.collapse(true);
-                sel.removeAllRanges();
-                sel.addRange(range);
+            if (!splitAndInsert(range, newlineSpan)) {
+                range.insertNode(newlineSpan);
             }
+
+            const newRange = document.createRange();
+            newRange.setStartAfter(newlineSpan);
+            newRange.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+
             debouncedSaveHistory();
             updateActionButtonsState();
         }
@@ -966,6 +781,7 @@ document.addEventListener('DOMContentLoaded', () => {
     EL.outputDiv.addEventListener('paste', (e) => {
         if (STATE.isSynced) return;
         e.preventDefault();
+
         const text = (e.clipboardData || window.clipboardData).getData('text');
         if (!text) return;
 
@@ -973,53 +789,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const sel = window.getSelection();
         if (!sel.rangeCount) return;
-        let range = sel.getRangeAt(0);
-        range.deleteContents(); // Clear selection first
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
 
-        // Create the blue span for new text
-        const span = document.createElement('span');
-        span.className = 'diff-gap';
-        span.textContent = text;
+        const pasteSpan = document.createElement('span');
+        pasteSpan.className = 'diff-user';
+        pasteSpan.textContent = text;
 
-        // Check if we are inserting INSIDE a styled span (add/replace/original)
-        // If so, we must split the parent span to prevent style inheritance (CSS !important issues)
-        const anchor = range.startContainer;
-        const parent = anchor.parentElement;
-
-        if (anchor.nodeType === Node.TEXT_NODE &&
-            (parent.classList.contains('diff-add') ||
-                parent.classList.contains('diff-replace') ||
-                parent.classList.contains('diff-original'))) {
-
-            // Strategy: Split text -> [Part1] [NewSpan] [Part2] -> Insert
-            const latterTextNode = anchor.splitText(range.startOffset);
-
-            const part2Span = parent.cloneNode(false);
-            part2Span.appendChild(latterTextNode);
-
-            // Move siblings to new span
-            while (latterTextNode.nextSibling) {
-                part2Span.appendChild(latterTextNode.nextSibling);
-            }
-
-            parent.after(part2Span);
-            parent.after(span);
-
-            // Cleanup empty spans if split happened at edges
-            if (parent.textContent.length === 0) parent.remove();
-            if (part2Span.textContent.length === 0) part2Span.remove();
-
-        } else {
-            // Normal insertion (already in gap or root)
-            range.insertNode(span);
+        if (!splitAndInsert(range, pasteSpan)) {
+            range.insertNode(pasteSpan);
         }
 
-        // Move cursor to end of new span
-        range = document.createRange();
-        range.setStartAfter(span);
-        range.setEndAfter(span);
+        const newRange = document.createRange();
+        newRange.setStartAfter(pasteSpan);
+        newRange.collapse(true);
         sel.removeAllRanges();
-        sel.addRange(range);
+        sel.addRange(newRange);
 
         saveHistorySnapshot();
         updateActionButtonsState();
