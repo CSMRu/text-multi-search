@@ -10,7 +10,6 @@
  * 6. Initialization & Event Listeners
  *
  * CSS Architecture:
- * CSS Architecture:
  * - base.css: Reset, Theme Variables, and Typography
  * - layout.css: Structural Layout (Grid/Flexbox)
  * - components.css: Component-specific styling

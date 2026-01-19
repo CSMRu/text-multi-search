@@ -154,7 +154,6 @@ textarea {
     line-height: 1.5;
     white-space: pre-wrap;
     word-wrap: break-word;
-    word-wrap: break-word;
     /* Must match textarea wrapping */
     overflow: hidden;
     pointer-events: none;
@@ -644,7 +643,3 @@ textarea {
 .diff-gap {
     color: var(--diff-user-text);
 }
-
-/* ==========================================================================
-   Panels
-   ========================================================================== */
