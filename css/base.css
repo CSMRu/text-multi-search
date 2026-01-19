@@ -39,6 +39,9 @@
     /* Overlay */
     --drop-overlay-bg: rgba(255, 255, 255, 0.9);
 
+    /* Syntax Highlighting */
+    --syntax-comment: #16a34a;
+
     /* Layout & Settings */
     --toolbar-height: 80px;
     --font-size-base: 16px;
@@ -84,6 +87,8 @@
     --diff-del-text: #fca5a5;
 
     --drop-overlay-bg: rgba(15, 17, 21, 0.9);
+
+    --syntax-comment: #22c55e;
 }
 
 /* ==========================================================================

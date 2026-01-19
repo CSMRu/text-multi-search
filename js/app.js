@@ -10,9 +10,10 @@
  * 6. Initialization & Event Listeners
  *
  * CSS Architecture:
- * - base.css: Reset, Variables (Theme), Typography, Utilities
- * - layout.css: Grid, Flexbox, Structural Spacing (Sizing/Positioning)
- * - components.css: Visual Styling for Widgets (Buttons, Inputs, Panels, DiffViewer)
+ * CSS Architecture:
+ * - base.css: Reset, Theme Variables, and Typography
+ * - layout.css: Structural Layout (Grid/Flexbox)
+ * - components.css: Component-specific styling
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -25,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Inputs
         sourceInput: document.getElementById('text-source'),
         keywordsInput: document.getElementById('text-keywords'),
+        keywordsBackdrop: document.getElementById('keywords-backdrop'),
         outputDiv: document.getElementById('search-output'),
 
         // File Operations
@@ -51,11 +53,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const STATE = {
         fontSize: 12,        // Current font size in pt
-        isSynced: true,      // True if searching, False if editing manually
-        isRegexMode: false,  // True if /regex/ patterns are enabled
-        isKeywordsDirty: true,
+        isSynced: true,      // true: Search Mode (Read-only), false: Edit Mode (Manual)
+        isRegexMode: false,  // true: Treat keywords as Regex
+        isKeywordsDirty: true, // Flag to rebuild matchers only when keywords change
 
-        // Caching
+        // Caching for performance
         cachedMatchers: null,
         debounceTimer: null,
 
@@ -90,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
-    // Debouncer for search processing
+    // Debounces input events to prevent excessive processing during typing
     function requestUpdate() {
         if (STATE.debounceTimer) clearTimeout(STATE.debounceTimer);
         STATE.debounceTimer = setTimeout(() => {
@@ -98,7 +100,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }, CONFIG.DEBOUNCE_DELAY);
     }
 
-    // Helper: Get global character offset relative to container
+    // Calculates global character offset relative to container, handling nested nodes
+    // Essential for tracking cursor position across contenteditable updates
     function getCursorOffset(container) {
         const sel = window.getSelection();
         if (!sel.rangeCount) return 0;
@@ -208,6 +211,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
+
+
     /* ==========================================================================
        4. Core Logic (Search Platform)
        ========================================================================== */
@@ -225,6 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let isReplacement = false;
 
             // Handle "search // replace" syntax
+            // Example: "apple // orange" -> Search "apple", Replace with "orange"
             const separator = ' // ';
             const sepIndex = trimmed.indexOf(separator);
 
@@ -497,8 +503,54 @@ document.addEventListener('DOMContentLoaded', () => {
             if (nameDisplayElement) nameDisplayElement.textContent = file.name;
             textAreaElement.value = text;
             inputElement.value = '';
-            if (textAreaElement === EL.keywordsInput) STATE.isKeywordsDirty = true;
+            if (textAreaElement === EL.keywordsInput) {
+                STATE.isKeywordsDirty = true;
+                // Defer to ensure DOM update if needed, though value set is sync
+                setTimeout(syncBackdrop, 0);
+            }
         });
+    }
+
+    /* --- Syntax Highlighting Module --- */
+    function syncBackdrop() {
+        if (!EL.keywordsBackdrop || !EL.keywordsInput) return;
+
+        const text = EL.keywordsInput.value;
+        const lines = text.split('\n');
+
+        const stylizedLines = lines.map(line => {
+            // Check for comment start (starts with //), but render the full line including whitespace
+            if (line.trim().startsWith('//')) {
+                return `<span class="comment">${escapeHtml(line)}</span>`;
+            }
+            return escapeHtml(line);
+        });
+
+        // specific fix for trailing newlines in pre-wrap div
+        let html = stylizedLines.join('\n');
+        if (text.endsWith('\n')) {
+            html += '<br>';
+        }
+
+        EL.keywordsBackdrop.innerHTML = html;
+
+        // Sync scroll immediately (e.g. paste)
+        EL.keywordsBackdrop.scrollTop = EL.keywordsInput.scrollTop;
+        EL.keywordsBackdrop.scrollLeft = EL.keywordsInput.scrollLeft;
+    }
+
+    function initSyntaxHighlighting() {
+        if (!EL.keywordsBackdrop || !EL.keywordsInput) return;
+
+        // Initial Sync
+        syncBackdrop();
+
+        // Use ResizeObserver to keep backdrop width in sync with textarea
+        // This fixes misalignment when the vertical scrollbar appears/disappears
+        const resizeObserver = new ResizeObserver(() => {
+            EL.keywordsBackdrop.style.width = `${EL.keywordsInput.clientWidth}px`;
+        });
+        resizeObserver.observe(EL.keywordsInput);
     }
 
     function initDragAndDrop() {
@@ -529,7 +581,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     readFileContent(file, (text) => {
                         if (nameDisplay) nameDisplay.textContent = file.name;
                         textarea.value = text;
-                        if (textarea === EL.keywordsInput) STATE.isKeywordsDirty = true;
+                        if (textarea === EL.keywordsInput) {
+                            STATE.isKeywordsDirty = true;
+                            setTimeout(syncBackdrop, 0);
+                        }
                     });
                 }
             });
@@ -543,10 +598,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Input & Upload Events ---
     EL.sourceInput.addEventListener('input', requestUpdate);
-    EL.keywordsInput.addEventListener('input', () => { STATE.isKeywordsDirty = true; requestUpdate(); });
+    EL.keywordsInput.addEventListener('input', () => {
+        STATE.isKeywordsDirty = true;
+        syncBackdrop();
+        requestUpdate();
+    });
+    EL.keywordsInput.addEventListener('scroll', () => {
+        if (EL.keywordsBackdrop) {
+            EL.keywordsBackdrop.scrollTop = EL.keywordsInput.scrollTop;
+            EL.keywordsBackdrop.scrollLeft = EL.keywordsInput.scrollLeft;
+        }
+    });
+
+    // Initialize backdrop and sync width
+    initSyntaxHighlighting();
 
     if (EL.uploadSource) EL.uploadSource.addEventListener('change', () => handleFileUpload(EL.uploadSource, EL.sourceInput, EL.fileNameSource));
-    if (EL.uploadKeywords) EL.uploadKeywords.addEventListener('change', () => handleFileUpload(EL.uploadKeywords, EL.keywordsInput, EL.fileNameKeywords));
+    if (EL.uploadKeywords) EL.uploadKeywords.addEventListener('change', () => {
+        handleFileUpload(EL.uploadKeywords, EL.keywordsInput, EL.fileNameKeywords);
+        // We need to wait for file read to complete. 
+        // handleFileUpload uses a callback but doesn't expose it here easily.
+        // However, handleFileUpload sets value then triggers... wait, it doesn't trigger input event automatically unless dispatched.
+        // It sets value directly: textAreaElement.value = text;
+        // In handleFileUpload, we should trigger sync. Let's patch handleFileUpload instead of here?
+        // Or just observe mutation? No.
+        // Let's modify handleFileUpload instead or just rely on the fact that handleFileUpload modifies the element.
+        // Actually, looking at handleFileUpload logic:
+        // inner: callback(e.target.result);
+        // callback: textAreaElement.value = text;
+        // It does NOT dispatch input event.
+        // So I also need to update handleFileUpload to call syncBackdrop if it's the keywords input.
+    });
 
     // --- Toolbar Buttons ---
     EL.btnTheme.addEventListener('click', toggleTheme);
