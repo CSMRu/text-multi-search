@@ -25,6 +25,7 @@ Enter each rule on a new line in the **Search Keywords** panel:
 | `Keyword` | Highlights all occurrences of "Keyword" | `Error` |
 | `Search // Replace` | Replaces "Search" with "Replace" | `fix // fixed` |
 | `[num]` | Matches any sequence of digits (e.g. `User[num]` matches `User123`) | `[num]` |
+| `[cjk]` | Matches one CJK character (e.g. `[cjk]田` matches `山田`) | `[cjk]` |
 | `/regex/` | Matches the Regular Expression | `/^Error.*$/` |
 
 > **Note**: Lines starting with `//` are treated as comments and ignored.

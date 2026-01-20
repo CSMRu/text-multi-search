@@ -258,6 +258,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     let pattern = escapeRegExp(search);
                     // 2. Identify the escaped sequence for [num] (which is \[num\]) and replace with digit matcher
                     pattern = pattern.replace(/\\\[num\\\]/g, '\\d+');
+                    // 3. Replace [cjk] with CJK Unified Ideographs range (single character)
+                    pattern = pattern.replace(/\\\[cjk\\\]/g, '[\u4E00-\u9FFF]');
                     regex = new RegExp(pattern, 'g');
                 }
                 matchers.push({ regex, searchStr: search, replace, isReplacement });
