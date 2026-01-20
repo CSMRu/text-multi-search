@@ -250,19 +250,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 let regex;
+                let replacePattern = replace; // For wildcard capture replacement
                 if (STATE.isRegexMode && search.startsWith('/') && search.endsWith('/') && search.length > 2) {
                     regex = new RegExp(search.slice(1, -1), 'g');
                 } else {
-                    // Smart Wildcard: Replace [num] with \d+ anywhere in the string
-                    // 1. Escape the base string to treat special chars (like dots/brackets) literally
+                    // Smart Wildcard with Capture Groups
+                    // 1. Escape the base string to treat special chars literally
                     let pattern = escapeRegExp(search);
-                    // 2. Identify the escaped sequence for [num] (which is \[num\]) and replace with digit matcher
-                    pattern = pattern.replace(/\\\[num\\\]/g, '\\d+');
-                    // 3. Replace [cjk] with CJK Unified Ideographs range (single character)
-                    pattern = pattern.replace(/\\\[cjk\\\]/g, '[\u4E00-\u9FFF]');
+
+                    // 2. Track capture group order and convert wildcards to capture groups
+                    const wildcardOrder = [];
+                    pattern = pattern.replace(/\\\[(num|cjk)\\\]/g, (match, type) => {
+                        wildcardOrder.push(type);
+                        if (type === 'num') return '(\\d+)';
+                        if (type === 'cjk') return '([\u4E00-\u9FFF])';
+                        return match;
+                    });
+
+                    // 3. Build replacePattern: convert [num]/[cjk] in replace string to $1, $2, etc.
+                    if (isReplacement && wildcardOrder.length > 0) {
+                        let groupIndex = 0;
+                        replacePattern = replace.replace(/\[(num|cjk)\]/g, (match, type) => {
+                            if (groupIndex < wildcardOrder.length && wildcardOrder[groupIndex] === type) {
+                                groupIndex++;
+                                return `$${groupIndex}`;
+                            }
+                            return match; // Keep original if type mismatch or no more groups
+                        });
+                    }
+
                     regex = new RegExp(pattern, 'g');
                 }
-                matchers.push({ regex, searchStr: search, replace, isReplacement });
+                matchers.push({ regex, searchStr: search, replace, replacePattern, isReplacement });
             } catch (e) {
                 console.warn("Invalid Regex:", search, e);
             }
@@ -314,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (match === undefined || (match && match.index < cursor)) {
                     m.regex.lastIndex = cursor;
                     const res = m.regex.exec(sourceText);
-                    nextMatches[i] = res ? { index: res.index, text: res[0], len: res[0].length } : null;
+                    nextMatches[i] = res ? { index: res.index, text: res[0], len: res[0].length, groups: res.slice(1) } : null;
                     match = nextMatches[i];
                 }
 
@@ -342,7 +361,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const bestM = matchers[bestMatcherIndex];
             const bestMatchData = nextMatches[bestMatcherIndex];
             const className = bestM.isReplacement ? 'diff-replace' : 'diff-add';
-            const displayContent = bestM.isReplacement ? bestM.replace : bestMatchData.text;
+            let displayContent = bestMatchData.text;
+            if (bestM.isReplacement) {
+                // Replace $1, $2, etc. with captured group values
+                displayContent = bestM.replacePattern.replace(/\$(\d+)/g, (m, n) => {
+                    const idx = parseInt(n, 10) - 1;
+                    return idx < bestMatchData.groups.length ? bestMatchData.groups[idx] : m;
+                });
+            }
 
             if (bestM.isReplacement) countR++; else countM++;
             resultParts.push(`<span class="${className}">${escapeHtml(displayContent)}</span>`);
