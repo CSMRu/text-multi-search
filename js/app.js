@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         btnSyncToggle: document.getElementById('btn-sync-toggle'),
         btnRegexToggle: document.getElementById('btn-regex-toggle'),
+        btnCopySource: document.getElementById('btn-copy-source'),
         btnCopyResult: document.getElementById('btn-copy-result'),
         btnDownloadResult: document.getElementById('btn-download-result'),
 
@@ -182,19 +183,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateActionButtonsState() {
-        if (!EL.btnDownloadResult) return;
-        const hasText = EL.outputDiv.textContent.trim().length > 0;
-
-        const setBtnState = (btn) => {
+        const setBtnState = (btn, hasContent) => {
             if (btn) {
-                btn.disabled = !hasText;
-                btn.style.opacity = hasText ? '1' : '0.5';
-                btn.style.pointerEvents = hasText ? 'auto' : 'none';
+                btn.disabled = !hasContent;
+                btn.style.opacity = hasContent ? '1' : '0.5';
+                btn.style.pointerEvents = hasContent ? 'auto' : 'none';
             }
         };
 
-        setBtnState(EL.btnDownloadResult);
-        setBtnState(EL.btnCopyResult);
+        const hasResultText = EL.outputDiv.textContent.trim().length > 0;
+        setBtnState(EL.btnDownloadResult, hasResultText);
+        setBtnState(EL.btnCopyResult, hasResultText);
+
+        const hasSourceText = EL.sourceInput.value.trim().length > 0;
+        setBtnState(EL.btnCopySource, hasSourceText);
     }
 
     function updateFontSize() {
@@ -684,6 +686,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (window.lucide) window.lucide.createIcons();
                 setTimeout(() => {
                     EL.btnCopyResult.innerHTML = originalIcon;
+                    if (window.lucide) window.lucide.createIcons();
+                }, 2000);
+            }).catch(() => showToast('Failed to copy.', 'error'));
+        });
+    }
+
+    if (EL.btnCopySource) {
+        EL.btnCopySource.addEventListener('click', () => {
+            if (!EL.sourceInput.value) return;
+            navigator.clipboard.writeText(EL.sourceInput.value).then(() => {
+                showToast('Copied to clipboard!', 'success');
+                const originalIcon = EL.btnCopySource.innerHTML;
+                EL.btnCopySource.innerHTML = '<i data-lucide="check"></i>';
+                if (window.lucide) window.lucide.createIcons();
+                setTimeout(() => {
+                    EL.btnCopySource.innerHTML = originalIcon;
                     if (window.lucide) window.lucide.createIcons();
                 }, 2000);
             }).catch(() => showToast('Failed to copy.', 'error'));

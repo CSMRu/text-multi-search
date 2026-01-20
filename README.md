@@ -1,5 +1,5 @@
 # Text Multi Search
-| <div align="center"> <a href="https://csmru.github.io/text-multi-search/"><img src="favicon.svg" width="128"></a> <br> [![Version](https://img.shields.io/badge/Version-26.0120b-B5E853?style=for-the-badge)](https://github.com/csmru/text-multi-search/commits) [![Hosted on GitHub Pages](https://img.shields.io/badge/GitHub-Pages-2b7346?style=for-the-badge&logo=github)](https://csmru.github.io/text-multi-search/) </div> |
+| <div align="center"> <a href="https://csmru.github.io/text-multi-search/"><img src="favicon.svg" width="128"></a> <br> [![Version](https://img.shields.io/badge/Version-26.0121a-B5E853?style=for-the-badge)](https://github.com/csmru/text-multi-search/commits) [![Hosted on GitHub Pages](https://img.shields.io/badge/GitHub-Pages-2b7346?style=for-the-badge&logo=github)](https://csmru.github.io/text-multi-search/) </div> |
 | :--- |
 
 > A powerful, client-side text analysis tool for searching, highlighting, and replacing multiple keywords simultaneously. Designed for developers and data analysts who need quick, visual text manipulation without leaving the browser.
