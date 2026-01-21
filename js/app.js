@@ -1039,4 +1039,5 @@ document.addEventListener('DOMContentLoaded', () => {
     initSyntaxHighlighting();
     initDragAndDrop();
     processText(); // Initial empty run to set states
+    refreshIcons(); // Initialize icons
 });
