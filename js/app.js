@@ -1,62 +1,65 @@
 /**
- * Text Multi Search - Main Application Logic
+ * Text Multi Search - Main Application
  * 
- * Structure:
- * 1. Constants & State
- * 2. Utility Functions (Pure helpers)
- * 3. UI Component Functions (DOM manipulation)
- * 4. Core Logic (Search algorithm)
- * 5. Feature Modules (History, Files, Editor)
- * 6. Initialization & Event Listeners
- *
- * CSS Architecture:
- * - base.css: Reset, Theme Variables, and Typography
- * - layout.css: Structural Layout (Grid/Flexbox)
- * - components.css: Component-specific styling
+ * ==============================================================================
+ * 1. CONFIGURATION & STATE .... Global settings
+ * 2. UTILITIES ............... Helper functions
+ * 3. CORE ENGINE ............. Search, Regex, and Parsing logic
+ * 4. UI MANAGERS ............. DOM, Toast, Theme
+ * 5. FEATURE MODULES ......... File I/O, History, Syntax Highlight
+ * 6. INITIALIZATION .......... Event Listeners
+ * ==============================================================================
  */
 
 document.addEventListener('DOMContentLoaded', () => {
 
-    /* ==========================================================================
-       1. Constants & State
-       ========================================================================== */
+    /* ==========================================================================================
+       [1] CONFIGURATION & STATE
+       - Global constants, DOM elements, and mutable state tracking
+       ========================================================================================== */
 
+    // DOM Elements - UI Nodes
     const EL = {
-        // Inputs
+        // --- Inputs & Display ---
         sourceInput: document.getElementById('text-source'),
         keywordsInput: document.getElementById('text-keywords'),
         keywordsBackdrop: document.getElementById('keywords-backdrop'),
         outputDiv: document.getElementById('search-output'),
 
-        // File Operations
+        // --- File Operations ---
         uploadSource: document.getElementById('upload-source'),
         fileNameSource: document.getElementById('file-name-source'),
         uploadKeywords: document.getElementById('upload-keywords'),
         fileNameKeywords: document.getElementById('file-name-keywords'),
 
-        // Controls
+        // --- Toolbar Controls ---
         btnTheme: document.getElementById('btn-theme'),
         btnFontInc: document.getElementById('font-increase'),
         btnFontDec: document.getElementById('font-decrease'),
         fontSizeDisplay: document.getElementById('font-size-display'),
         btnSyncToggle: document.getElementById('btn-sync-toggle'),
 
-        // Export Actions
+        // --- Action Buttons ---
+        btnKeywordsLock: document.getElementById('btn-keywords-lock'),
         btnCopySource: document.getElementById('btn-copy-source'),
         btnCopyResult: document.getElementById('btn-copy-result'),
         btnDownloadResult: document.getElementById('btn-download-result'),
 
-        // Stats
+        // --- Statistics ---
         countMatch: document.getElementById('count-match'),
         countReplace: document.getElementById('count-replace')
     };
 
+    // Application State - Mutable data tracking the app's status
     const STATE = {
-        fontSize: 12,        // Current font size in pt
-        isSynced: true,      // true: Search Mode (Read-only), false: Edit Mode (Manual)
-        isKeywordsDirty: true, // Flag to rebuild matchers only when keywords change
-        cachedMatchers: null,
-        debounceTimer: null,
+        fontSize: 12,           // Font size in points (pt)
+        isSynced: true,         // Mode: true = Auto-Search (Read-only), false = Manual Edit
+        isKeywordsLocked: true, // Keywords lock: true = Read-only, false = Editable
+        isKeywordsDirty: true,  // Optimization: Only rebuild Regex if keywords changed
+        cachedMatchers: null,   // Cache for compiled Regex objects
+        debounceTimer: null,    // Timer for input debouncing
+
+        // History Stack for Undo/Redo (Manual Edit Mode)
         history: {
             stack: [],
             pointer: -1,
@@ -65,36 +68,58 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // Constants - immutable configuration values
     const CONFIG = {
-        MAX_FILE_SIZE: 1 * 1024 * 1024, // 1MB
-        DEBOUNCE_DELAY: 150,
-        HISTORY_DEBOUNCE: 400
+        MAX_FILE_SIZE: 0.5 * 1024 * 1024, // Limit uploads to 500KB
+        DEBOUNCE_DELAY: 150,            // ms to wait before searching after typing
+        HISTORY_DEBOUNCE: 400           // ms to wait before saving undo snapshot
     };
 
-    /* ==========================================================================
-       2. Utility Functions
-       ========================================================================== */
 
+    /* ==========================================================================================
+       [2] UTILITIES
+       - Helper functions for string manipulation and DOM logic
+       ========================================================================================== */
+
+    // HTML Entity Map
     const htmlMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
 
+    /**
+     * Safely escapes text to prevent HTML injection.
+     * Use this whenever inserting user-generated text into innerHTML.
+     */
     function escapeHtml(text) {
         if (!text) return '';
         return text.replace(/[&<>"']/g, (m) => htmlMap[m]);
     }
 
+    /**
+     * Escapes characters that have special meaning in Regular Expressions.
+     */
     function escapeRegExp(string) {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
+
+
+    /**
+     * Re-initializes Lucide icons (if the library is loaded).
+     * Call this after adding new icons to the DOM dynamically.
+     */
     function refreshIcons() {
         if (window.lucide) window.lucide.createIcons();
     }
 
+    /**
+     * Schedules a search update.
+     * Prevents the search from running too frequently while typing.
+     */
     function requestUpdate() {
         if (STATE.debounceTimer) clearTimeout(STATE.debounceTimer);
         STATE.debounceTimer = setTimeout(processText, CONFIG.DEBOUNCE_DELAY);
     }
 
+    /** Checks if a DOM element is a diff span */
     function isStyledSpan(el) {
         return el && (
             el.classList.contains('diff-add') ||
@@ -103,7 +128,544 @@ document.addEventListener('DOMContentLoaded', () => {
         );
     }
 
-    // Calculates global character offset relative to container
+
+    /* ==========================================================================================
+       [3] CORE ENGINE (Worker Manager & Fallback)
+       - Search logic validation, Worker communication, and Fallback execution
+       ========================================================================================== */
+
+    const WORKER_CONFIG = {
+        TIMEOUT_MS: 3000 // 3 seconds timeout (Only works in Worker mode)
+    };
+
+    /**
+     * Fallback Engine: Runs on main thread when Web Workers are unavailable (e.g., file://).
+     * CAUTION: This shares logic with js/worker.js. Keep them in sync.
+     */
+    const FallbackEngine = {
+        buildMatchers(keywordsValue) {
+            const matchers = [];
+            const lines = keywordsValue.split('\n');
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed.startsWith('///')) return;
+
+                let search = trimmed;
+                let replace = trimmed;
+                let isReplacement = false;
+
+                const sepIndex = trimmed.indexOf('///');
+                if (sepIndex !== -1) {
+                    search = trimmed.substring(0, sepIndex).trim();
+                    replace = trimmed.substring(sepIndex + 3).trim();
+                    if (replace === '[del]') replace = '';
+                    isReplacement = true;
+                }
+
+                if (!search) return;
+
+                try {
+                    let replacePattern = replace;
+                    let isLineMode = false;
+                    if (search.startsWith('[line]')) {
+                        isLineMode = true;
+                        search = search.substring(6).trim();
+                        if (!search) return;
+                    }
+                    const ESCAPED_OR_PLACEHOLDER = '\uFFFF';
+                    let tempSearch = search.split('\\[or]').join(ESCAPED_OR_PLACEHOLDER);
+                    const segments = tempSearch.split(/\s*\[or\]\s*/);
+                    const wildcardOrder = [];
+                    const processedSegments = segments.filter(s => s.length > 0).map(s => {
+                        let content = s.split(ESCAPED_OR_PLACEHOLDER).join('[or]');
+                        let p = escapeRegExp(content);
+                        p = p.replace(/\\\[(num|cjk)\\\]/g, (match, type) => {
+                            wildcardOrder.push(type);
+                            if (type === 'num') return '(\\d+)';
+                            if (type === 'cjk') return '([\\u4E00-\\u9FFF])';
+                            return match;
+                        });
+                        return p;
+                    });
+                    if (processedSegments.length === 0) return;
+                    const pattern = processedSegments.join('|');
+                    if (isReplacement) {
+                        replacePattern = replace.replace(/\$(?!\d)/g, () => '$$$$');
+                        if (wildcardOrder.length > 0) {
+                            let gIdx = 0;
+                            replacePattern = replacePattern.replace(/\[(num|cjk)\]/g, (m, type) =>
+                                (gIdx < wildcardOrder.length && wildcardOrder[gIdx] === type) ? `$${++gIdx}` : m
+                            );
+                        }
+                    }
+                    if (isLineMode && wildcardOrder.length === 0 && isReplacement && replacePattern.includes('[line]')) {
+                        replacePattern = replacePattern.replace(/\[line\]/g, () => '$$LINE$$');
+                    }
+                    matchers.push({
+                        regex: new RegExp(pattern, 'g'),
+                        searchStr: search,
+                        replace,
+                        replacePattern,
+                        isReplacement,
+                        isLineMode
+                    });
+                } catch (e) {
+                    console.warn("Invalid Regex:", search, e);
+                }
+            });
+            return matchers;
+        },
+
+        processText(sourceText, keywordsValue) {
+            if (!sourceText) return { html: '', countM: 0, countR: 0 };
+            const matchers = this.buildMatchers(keywordsValue);
+            if (matchers.length === 0) {
+                return { html: `<span class="diff-original">${escapeHtml(sourceText)}</span>`, countM: 0, countR: 0 };
+            }
+
+            let cursor = 0, countM = 0, countR = 0;
+            const resultParts = [];
+            const getDisplayContent = (matcher, matchData) => {
+                if (!matcher.isReplacement) return matchData.text;
+                return matcher.replacePattern.replace(/(\$\$LINE\$\$)|(\$\$)|(\$(\d+))/g, (match, lineToken, escDollar, capGroup, grpIdx) => {
+                    if (lineToken) return matchData.text.replace(/\r?\n$/, '');
+                    if (escDollar) return '$';
+                    if (capGroup) {
+                        const idx = parseInt(grpIdx, 10) - 1;
+                        return (matchData.groups[idx] !== undefined) ? matchData.groups[idx] : '';
+                    }
+                    return match;
+                });
+            };
+
+            const priorityRanges = [];
+            const lineMatchers = matchers.filter(m => m.isLineMode);
+            if (lineMatchers.length > 0) {
+                let lineRegex = /^[\s\S]*?(\r?\n|$)/gm;
+                let lineMatch;
+                while ((lineMatch = lineRegex.exec(sourceText)) !== null) {
+                    if (!lineMatch[0]) break;
+                    for (let m of lineMatchers) {
+                        m.regex.lastIndex = 0;
+                        const res = m.regex.exec(lineMatch[0]);
+                        if (res) {
+                            priorityRanges.push({
+                                start: lineMatch.index,
+                                end: lineMatch.index + lineMatch[0].length,
+                                matcher: m,
+                                matchData: { index: lineMatch.index, text: lineMatch[0], len: lineMatch[0].length, groups: res.slice(1) }
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+
+            const textMatchers = matchers.filter(m => !m.isLineMode);
+            textMatchers.forEach(m => m.regex.lastIndex = 0);
+            const nextMatches = new Array(textMatchers.length).fill(undefined);
+            let priorityIdx = 0;
+
+            while (cursor < sourceText.length) {
+                if (priorityIdx < priorityRanges.length) {
+                    const pRange = priorityRanges[priorityIdx];
+                    if (cursor === pRange.start) {
+                        const content = getDisplayContent(pRange.matcher, pRange.matchData);
+                        const cls = pRange.matcher.isReplacement ? 'diff-replace' : 'diff-add';
+                        if (pRange.matcher.isReplacement) countR++; else countM++;
+                        resultParts.push(`<span class="${cls}">${escapeHtml(content)}</span>`);
+                        cursor = pRange.end;
+                        priorityIdx++;
+                        continue;
+                    }
+                }
+
+                let limit = (priorityIdx < priorityRanges.length) ? priorityRanges[priorityIdx].start : Infinity;
+                let bestIdx = -1, minIndex = Infinity, bestLen = 0;
+
+                for (let i = 0; i < textMatchers.length; i++) {
+                    const m = textMatchers[i];
+                    if (!nextMatches[i] || nextMatches[i].index < cursor) {
+                        m.regex.lastIndex = cursor;
+                        const res = m.regex.exec(sourceText);
+                        nextMatches[i] = res ? { index: res.index, text: res[0], len: res[0].length, groups: res.slice(1) } : null;
+                    }
+                    const match = nextMatches[i];
+                    if (match) {
+                        if (match.index >= limit || match.index + match.len > limit) continue;
+                        if (match.index < minIndex || (match.index === minIndex && match.len > bestLen)) {
+                            minIndex = match.index;
+                            bestLen = match.len;
+                            bestIdx = i;
+                        }
+                    }
+                }
+
+                if (bestIdx === -1) {
+                    const nextTarget = (limit === Infinity) ? sourceText.length : limit;
+                    if (nextTarget > cursor) resultParts.push(`<span class="diff-original">${escapeHtml(sourceText.substring(cursor, nextTarget))}</span>`);
+                    cursor = nextTarget;
+                    continue;
+                }
+
+                if (minIndex > cursor) resultParts.push(`<span class="diff-original">${escapeHtml(sourceText.substring(cursor, minIndex))}</span>`);
+
+                const bestM = textMatchers[bestIdx];
+                const bestData = nextMatches[bestIdx];
+                const content = getDisplayContent(bestM, bestData);
+                const cls = bestM.isReplacement ? 'diff-replace' : 'diff-add';
+                if (bestM.isReplacement) countR++; else countM++;
+                resultParts.push(`<span class="${cls}">${escapeHtml(content)}</span>`);
+                cursor = minIndex + bestData.len;
+            }
+
+            return { html: resultParts.join(''), countM, countR };
+        }
+    };
+
+    /**
+     * Manages Web Worker for search operations.
+     */
+    const WorkerManager = {
+        worker: null,
+        timer: null,
+        currentId: 0,
+        isLoading: false,
+        useFallback: false,
+
+        init() {
+            if (window.location.protocol === 'file:') {
+                this.useFallback = true;
+                showToast('Running in local mode (No Worker).', 'info');
+                console.warn('Worker disabled due to file:// protocol. Using FallbackEngine.');
+                return;
+            }
+            try {
+                if (this.worker) this.worker.terminate();
+                this.worker = new Worker('js/worker.js');
+                this.worker.onmessage = this.handleMessage.bind(this);
+                this.worker.onerror = (e) => {
+                    console.error('Worker Error:', e);
+                    this.useFallback = true; // Switch to fallback on error
+                    this.finishState();
+                    showToast('Worker failed. Switching to Sync mode.', 'error');
+                };
+            } catch (e) {
+                this.useFallback = true;
+                console.error('Worker Init Failed:', e);
+                showToast('Worker initialization failed. Switching to Sync mode.', 'error');
+            }
+        },
+
+        postMessage(sourceText, keywordsValue) {
+            if (!this.worker && !this.useFallback) this.init();
+
+            this.currentId++;
+            this.setLoading(true);
+
+            // Synchronous Fallback
+            if (this.useFallback) {
+                // Use setTimeout to allow UI to render Loading Bar briefly
+                setTimeout(() => {
+                    try {
+                        const result = FallbackEngine.processText(sourceText, keywordsValue);
+                        this.handleMessage({ data: { id: this.currentId, status: 'success', ...result } });
+                    } catch (e) {
+                        this.handleMessage({ data: { id: this.currentId, status: 'error', message: e.message } });
+                    }
+                }, 10);
+                return;
+            }
+
+            // Cancel previous timeout
+            if (this.timer) clearTimeout(this.timer);
+
+            // Set Safety Timeout
+            this.timer = setTimeout(() => {
+                this.handleTimeout();
+            }, WORKER_CONFIG.TIMEOUT_MS);
+
+            this.worker.postMessage({
+                id: this.currentId,
+                sourceText,
+                keywordsValue
+            });
+        },
+
+        handleMessage(e) {
+            const { id, status, html, countM, countR, message } = e.data;
+
+            // Ignore old results
+            if (id !== this.currentId) return;
+
+            clearTimeout(this.timer);
+            this.setLoading(false);
+
+            if (status === 'success') {
+                EL.outputDiv.innerHTML = html;
+                EL.countMatch.textContent = countM;
+                EL.countReplace.textContent = countR;
+                updateActionButtonsState();
+            } else {
+                showToast(message || 'Unknown Error', 'error');
+            }
+        },
+
+        handleTimeout() {
+            this.worker.terminate(); // Kill the frozen worker
+            this.worker = null; // Force re-init next time
+            this.setLoading(false);
+
+            showToast('Search Timed Out (Too complex)', 'error');
+            EL.outputDiv.innerHTML += '<div style="color:var(--diff-del-text); padding:1rem; font-weight:bold; border:1px solid var(--diff-del-text); margin-top:1rem;">⚠️ Calculation Timed Out. Please simplify your keywords.</div>';
+        },
+
+        setLoading(active) {
+            this.isLoading = active;
+            const bar = document.getElementById('loading-bar');
+            if (bar) {
+                if (active) bar.classList.add('active');
+                else bar.classList.remove('active');
+            }
+        },
+
+        finishState() {
+            clearTimeout(this.timer);
+            this.setLoading(false);
+        }
+    };
+
+    // Initialize Worker
+    WorkerManager.init();
+
+
+    /**
+     * Bridge function to request search update.
+     */
+    function processText() {
+        if (!STATE.isSynced) return;
+
+        // Optimizations
+        const sourceText = EL.sourceInput.value;
+        const keywordsValue = EL.keywordsInput.value;
+
+        if (!sourceText) {
+            EL.outputDiv.innerHTML = '';
+            EL.countMatch.textContent = '0';
+            EL.countReplace.textContent = '0';
+            updateActionButtonsState();
+            return;
+        }
+
+        WorkerManager.postMessage(sourceText, keywordsValue);
+    }
+
+
+    /* ==========================================================================================
+       [4] UI & DOM MANAGEMENT
+       - Toast notifications, Theme toggles, Font size control, and Button states
+       ========================================================================================== */
+
+    /** Displays a temporary toast notification at the top of the screen */
+    function showToast(message, type = 'error') {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+
+        const icon = { error: 'alert-circle', success: 'check-circle', info: 'info' }[type] || 'alert-circle';
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.innerHTML = `<span class="toast-icon"><i data-lucide="${icon}"></i></span><span>${escapeHtml(message)}</span>`;
+
+        container.appendChild(toast);
+        refreshIcons();
+
+        setTimeout(() => {
+            toast.classList.add('fade-out');
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+    }
+
+    /** Updates Button UI (Enabled/Disabled) based on input state */
+    function updateActionButtonsState() {
+        const hasResult = EL.outputDiv.textContent.trim().length > 0;
+        const hasSource = EL.sourceInput.value.trim().length > 0;
+
+        const setBtnState = (btn, isActive) => {
+            if (btn) {
+                btn.disabled = !isActive;
+                btn.style.opacity = isActive ? '1' : '0.5';
+                btn.style.pointerEvents = isActive ? 'auto' : 'none';
+            }
+        };
+
+        setBtnState(EL.btnDownloadResult, hasResult);
+        setBtnState(EL.btnCopyResult, hasResult);
+        setBtnState(EL.btnCopySource, hasSource);
+    }
+
+    /** Changes font size and updates CSS variable */
+    function updateFontSize(delta) {
+        if (delta) {
+            STATE.fontSize = Math.max(8, Math.min(24, STATE.fontSize + delta));
+        }
+        EL.fontSizeDisplay.textContent = `${STATE.fontSize}pt`;
+        document.documentElement.style.setProperty('--font-size-base', `${STATE.fontSize * 1.333}px`);
+    }
+
+    /** Toggles Dark/Light theme */
+    function toggleTheme() {
+        const html = document.documentElement;
+        const newTheme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-theme', newTheme);
+
+        if (EL.btnTheme) {
+            EL.btnTheme.innerHTML = `<i data-lucide="${newTheme === 'dark' ? 'moon' : 'sun'}"></i>`;
+            refreshIcons();
+        }
+    }
+
+    /** Toggles Keywords lock (Read-only ↔ Editable) */
+    function toggleKeywordsLock() {
+        STATE.isKeywordsLocked = !STATE.isKeywordsLocked;
+        EL.keywordsInput.readOnly = STATE.isKeywordsLocked;
+
+        const icon = STATE.isKeywordsLocked ? 'lock' : 'unlock';
+        const title = STATE.isKeywordsLocked ? 'Unlock Keywords' : 'Lock Keywords';
+
+        EL.btnKeywordsLock.innerHTML = `<i data-lucide="${icon}"></i>`;
+        EL.btnKeywordsLock.title = title;
+
+        // Toggle visual state classes
+        EL.btnKeywordsLock.classList.toggle('locked', STATE.isKeywordsLocked);
+        EL.btnKeywordsLock.classList.toggle('unlocked', !STATE.isKeywordsLocked);
+
+        refreshIcons();
+
+        // Focus input if unlocked
+        if (!STATE.isKeywordsLocked) {
+            EL.keywordsInput.focus();
+        }
+    }
+
+
+    /* ==========================================================================================
+       [5] FEATURE MODULES
+       - File I/O, Undo/Redo History, Syntax Highlighting
+       ========================================================================================== */
+
+    /* --- 5.1 File I/O --- */
+
+    // Allowed extensions for source code and text files
+    const ALLOWED_EXTENSIONS = [
+        '.txt', '.md', '.markdown',
+        '.js', '.jsx', '.ts', '.tsx', '.json',
+        '.html', '.htm', '.css', '.scss', '.less',
+        '.xml', '.svg', '.log', '.csv', '.yml', '.yaml',
+        '.ini', '.conf', '.sh', '.bat', '.ps1'
+    ];
+
+    /**
+     * strict validation to ensure file is safe text.
+     * Checks both MIME type and Extension whitelists.
+     */
+    function isValidTextFile(file) {
+        // 1. Pass if MIME type explicitly claims to be text or script
+        if (file.type.startsWith('text/') ||
+            file.type === 'application/json' ||
+            file.type === 'application/xml' ||
+            file.type === 'image/svg+xml' ||
+            file.type.includes('javascript') ||
+            file.type.includes('ecmascript')) {
+            return true;
+        }
+
+        // 2. Fallback: If MIME is empty/generic, check Extension Whitelist
+        if (!file.name) return false;
+        const lowerName = file.name.toLowerCase();
+        return ALLOWED_EXTENSIONS.some(ext => lowerName.endsWith(ext));
+    }
+
+    function readFileContent(file, callback) {
+        if (file.size > CONFIG.MAX_FILE_SIZE) {
+            return showToast(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+        }
+
+        // Strict Whitelist Validation
+        if (!isValidTextFile(file)) {
+            return showToast('Unsupported file type. Please upload a Text file.', 'error');
+        }
+
+        const r = new FileReader();
+        r.onload = e => {
+            callback(e.target.result);
+            processText();
+        };
+        r.readAsText(file);
+    }
+
+    function handleFileUpload(input, area, display) {
+        if (input.files[0]) {
+            readFileContent(input.files[0], txt => {
+                if (display) display.textContent = input.files[0].name;
+                area.value = txt;
+                input.value = '';
+                if (area === EL.keywordsInput) {
+                    STATE.isKeywordsDirty = true;
+                    setTimeout(syncBackdrop, 0); // Trigger highlighting update
+                }
+            });
+        }
+    }
+
+    /* --- 5.2 History (Undo/Redo) --- */
+
+    // Snapshots the current HTML content for Undo/Redo
+    function saveHistorySnapshot() {
+        if (STATE.isSynced) return; // Only save in Manual Edit mode
+
+        const content = EL.outputDiv.innerHTML;
+        const cursor = getCursorOffset(EL.outputDiv);
+
+        // Deduplication: Don't save if identical to top of stack
+        if (STATE.history.pointer >= 0 && STATE.history.stack[STATE.history.pointer].content === content) {
+            return;
+        }
+
+        // Branching: If we are in middle of stack and editing, discard future (redo) history
+        if (STATE.history.pointer < STATE.history.stack.length - 1) {
+            STATE.history.stack = STATE.history.stack.slice(0, STATE.history.pointer + 1);
+        }
+
+        STATE.history.stack.push({ content, cursor });
+
+        // Maintain limit
+        if (STATE.history.stack.length > STATE.history.limit) {
+            STATE.history.stack.shift();
+        } else {
+            STATE.history.pointer++;
+        }
+    }
+
+    const debouncedSaveHistory = () => {
+        clearTimeout(STATE.history.timer);
+        STATE.history.timer = setTimeout(saveHistorySnapshot, CONFIG.HISTORY_DEBOUNCE);
+    };
+
+    function performHistoryAction(isUndo) {
+        const canAction = isUndo
+            ? STATE.history.pointer > 0
+            : STATE.history.pointer < STATE.history.stack.length - 1;
+
+        if (canAction) {
+            STATE.history.pointer += isUndo ? -1 : 1;
+            const s = STATE.history.stack[STATE.history.pointer];
+            EL.outputDiv.innerHTML = s.content;
+            setCursorOffset(EL.outputDiv, s.cursor);
+            updateActionButtonsState();
+        }
+    }
+
+    // Helper: Get cursor position as a character offset
     function getCursorOffset(container) {
         const sel = window.getSelection();
         if (!sel.rangeCount) return 0;
@@ -116,7 +678,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return preCaretRange.toString().length;
     }
 
-    // Set global cursor position by character offset
+    // Helper: Set cursor position from character offset
     function setCursorOffset(container, offset) {
         const range = document.createRange();
         const sel = window.getSelection();
@@ -149,354 +711,9 @@ document.addEventListener('DOMContentLoaded', () => {
         sel.addRange(range);
     }
 
-    /* ==========================================================================
-       3. UI Component Functions
-       ========================================================================== */
+    /* --- 5.3 Manual Edit Helper --- */
 
-    function showToast(message, type = 'error') {
-        const container = document.getElementById('toast-container');
-        if (!container) return;
-
-        const icon = { error: 'alert-circle', success: 'check-circle', info: 'info' }[type] || 'alert-circle';
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.innerHTML = `<span class="toast-icon"><i data-lucide="${icon}"></i></span><span>${message}</span>`;
-
-        container.appendChild(toast);
-        refreshIcons();
-
-        setTimeout(() => {
-            toast.classList.add('fade-out');
-            setTimeout(() => toast.remove(), 300);
-        }, 4000);
-    }
-
-    function updateActionButtonsState() {
-        const hasResult = EL.outputDiv.textContent.trim().length > 0;
-        const hasSource = EL.sourceInput.value.trim().length > 0;
-
-        const setBtnState = (btn, isActive) => {
-            if (btn) {
-                btn.disabled = !isActive;
-                btn.style.opacity = isActive ? '1' : '0.5';
-                btn.style.pointerEvents = isActive ? 'auto' : 'none';
-            }
-        };
-
-        setBtnState(EL.btnDownloadResult, hasResult);
-        setBtnState(EL.btnCopyResult, hasResult);
-        setBtnState(EL.btnCopySource, hasSource);
-    }
-
-    function updateFontSize(delta) {
-        if (delta) {
-            STATE.fontSize = Math.max(8, Math.min(24, STATE.fontSize + delta));
-        }
-        EL.fontSizeDisplay.textContent = `${STATE.fontSize}pt`;
-        document.documentElement.style.setProperty('--font-size-base', `${STATE.fontSize * 1.333}px`);
-    }
-
-    function toggleTheme() {
-        const html = document.documentElement;
-        const newTheme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-        html.setAttribute('data-theme', newTheme);
-
-        if (EL.btnTheme) {
-            EL.btnTheme.innerHTML = `<i data-lucide="${newTheme === 'dark' ? 'moon' : 'sun'}"></i>`;
-            refreshIcons();
-        }
-    }
-
-    /* ==========================================================================
-       4. Core Logic (Search Platform)
-       ========================================================================== */
-
-    function buildMatchers(keywordsValue) {
-        const matchers = [];
-        const lines = keywordsValue.split('\n');
-
-        lines.forEach(line => {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith('///')) return;
-
-            let search = trimmed;
-            let replace = trimmed;
-            let isReplacement = false;
-
-            const sepIndex = trimmed.indexOf('///');
-            if (sepIndex !== -1) {
-                search = trimmed.substring(0, sepIndex).trim();
-                replace = trimmed.substring(sepIndex + 3).trim();
-                if (replace === '[del]') replace = '';
-                isReplacement = true;
-            }
-
-            if (!search) return;
-
-            try {
-                let replacePattern = replace;
-                let isLineMode = false;
-
-                if (search.startsWith('[line]')) {
-                    isLineMode = true;
-                    search = search.substring(6).trim();
-                    if (!search) return;
-                }
-
-                // Prepare Regex Pattern
-                let pattern = escapeRegExp(search);
-
-                // [or] Support
-                pattern = pattern.replace(/\s*\\\[or\\\]\s*/g, '|');
-
-                // Wildcard Support ([num], [cjk])
-                const wildcardOrder = [];
-                pattern = pattern.replace(/\\\[(num|cjk)\\\]/g, (match, type) => {
-                    wildcardOrder.push(type);
-                    if (type === 'num') return '(\\d+)';
-                    if (type === 'cjk') return '([\u4E00-\u9FFF])';
-                    return match;
-                });
-
-                if (isReplacement) {
-                    // Safe Mode: Treat ALL '$' as literal '$$' unless strictly needed for capture groups
-                    replacePattern = replace.replace(/\$(?!\d)/g, () => '$$$$');
-
-                    // Restore functional capture groups for [num]/[cjk]
-                    if (wildcardOrder.length > 0) {
-                        let gIdx = 0;
-                        replacePattern = replacePattern.replace(/\[(num|cjk)\]/g, (m, type) =>
-                            (gIdx < wildcardOrder.length && wildcardOrder[gIdx] === type) ? `$${++gIdx}` : m
-                        );
-                    }
-                }
-
-                // Handle [line] token in replacement
-                if (isLineMode && wildcardOrder.length === 0 && isReplacement && replacePattern.includes('[line]')) {
-                    replacePattern = replacePattern.replace(/\[line\]/g, () => '$$LINE$$');
-                }
-
-                matchers.push({
-                    regex: new RegExp(pattern, 'g'),
-                    searchStr: search,
-                    replace,
-                    replacePattern,
-                    isReplacement,
-                    isLineMode
-                });
-            } catch (e) {
-                console.warn("Invalid Regex:", search, e);
-            }
-        });
-        return matchers;
-    }
-
-    /** Main search/replace engine */
-    function processText() {
-        if (!STATE.isSynced) return;
-
-        const sourceText = EL.sourceInput.value;
-        if (STATE.isKeywordsDirty) {
-            STATE.cachedMatchers = buildMatchers(EL.keywordsInput.value);
-            STATE.isKeywordsDirty = false;
-        }
-
-        const matchers = STATE.cachedMatchers;
-
-        if (!sourceText || matchers.length === 0) {
-            EL.outputDiv.innerHTML = sourceText ? `<span class="diff-original">${escapeHtml(sourceText)}</span>` : '';
-            EL.countMatch.textContent = '0';
-            EL.countReplace.textContent = '0';
-            updateActionButtonsState();
-            return;
-        }
-
-        let cursor = 0;
-        let countM = 0;
-        let countR = 0;
-        const resultParts = [];
-
-        // Helper: Calculate replacement content (shared by Pass 1 & 2)
-        const getDisplayContent = (matcher, matchData) => {
-            if (!matcher.isReplacement) return matchData.text;
-
-            // Replace $$LINE$$, $$, and $n with actual content
-            return matcher.replacePattern.replace(/(\$\$LINE\$\$)|(\$\$)|(\$(\d+))/g, (match, lineToken, escDollar, capGroup, grpIdx) => {
-                if (lineToken) {
-                    return matchData.text.replace(/\r?\n$/, '');
-                }
-                if (escDollar) return '$';
-                if (capGroup) {
-                    const idx = parseInt(grpIdx, 10) - 1;
-                    return (matchData.groups[idx] !== undefined) ? matchData.groups[idx] : '';
-                }
-                return match;
-            });
-        };
-
-        // Pass 1: Pre-scan Priority Ranges ([line] mode)
-        const priorityRanges = [];
-        const lineMatchers = matchers.filter(m => m.isLineMode);
-
-        if (lineMatchers.length > 0) {
-            let lineRegex = /^[\s\S]*?(\r?\n|$)/gm;
-            let lineMatch;
-
-            while ((lineMatch = lineRegex.exec(sourceText)) !== null) {
-                if (!lineMatch[0]) break; // EOF check
-
-                for (let m of lineMatchers) {
-                    m.regex.lastIndex = 0;
-                    const res = m.regex.exec(lineMatch[0]);
-                    if (res) {
-                        priorityRanges.push({
-                            start: lineMatch.index,
-                            end: lineMatch.index + lineMatch[0].length,
-                            matcher: m,
-                            matchData: {
-                                index: lineMatch.index,
-                                text: lineMatch[0],
-                                len: lineMatch[0].length,
-                                groups: res.slice(1)
-                            }
-                        });
-                        break; // First match wins for this line
-                    }
-                }
-            }
-        }
-
-        // Pass 2: Main Scan (Text Mode)
-        const textMatchers = matchers.filter(m => !m.isLineMode);
-        textMatchers.forEach(m => m.regex.lastIndex = 0);
-
-        const nextMatches = new Array(textMatchers.length).fill(undefined);
-        let priorityIdx = 0;
-
-        while (cursor < sourceText.length) {
-            // Check Priority Range Overlap
-            if (priorityIdx < priorityRanges.length) {
-                const pRange = priorityRanges[priorityIdx];
-
-                if (cursor === pRange.start) {
-                    // Execute Priority Match
-                    const content = getDisplayContent(pRange.matcher, pRange.matchData);
-                    const cls = pRange.matcher.isReplacement ? 'diff-replace' : 'diff-add';
-
-                    if (pRange.matcher.isReplacement) countR++; else countM++;
-                    resultParts.push(`<span class="${cls}">${escapeHtml(content)}</span>`);
-
-                    cursor = pRange.end;
-                    priorityIdx++;
-                    continue;
-                }
-            }
-
-            // Limit search to next priority range
-            let limit = (priorityIdx < priorityRanges.length) ? priorityRanges[priorityIdx].start : Infinity;
-            let bestIdx = -1;
-            let minIndex = Infinity;
-            let bestLen = 0;
-
-            // Find best text match
-            for (let i = 0; i < textMatchers.length; i++) {
-                const m = textMatchers[i];
-
-                if (!nextMatches[i] || nextMatches[i].index < cursor) {
-                    m.regex.lastIndex = cursor;
-                    const res = m.regex.exec(sourceText);
-                    nextMatches[i] = res ? { index: res.index, text: res[0], len: res[0].length, groups: res.slice(1) } : null;
-                }
-
-                const match = nextMatches[i];
-                if (match) {
-                    if (match.index >= limit || match.index + match.len > limit) continue; // Skip overlaps
-
-                    if (match.index < minIndex || (match.index === minIndex && match.len > bestLen)) {
-                        minIndex = match.index;
-                        bestLen = match.len;
-                        bestIdx = i;
-                    }
-                }
-            }
-
-            // No match found or match is beyond limit
-            if (bestIdx === -1) {
-                const nextTarget = (limit === Infinity) ? sourceText.length : limit;
-                if (nextTarget > cursor) {
-                    resultParts.push(`<span class="diff-original">${escapeHtml(sourceText.substring(cursor, nextTarget))}</span>`);
-                }
-                cursor = nextTarget;
-                continue;
-            }
-
-            // Gap filling before match
-            if (minIndex > cursor) {
-                resultParts.push(`<span class="diff-original">${escapeHtml(sourceText.substring(cursor, minIndex))}</span>`);
-            }
-
-            // Execute Text Match
-            const bestM = textMatchers[bestIdx];
-            const bestData = nextMatches[bestIdx];
-            const content = getDisplayContent(bestM, bestData);
-            const cls = bestM.isReplacement ? 'diff-replace' : 'diff-add';
-
-            if (bestM.isReplacement) countR++; else countM++;
-            resultParts.push(`<span class="${cls}">${escapeHtml(content)}</span>`);
-
-            cursor = minIndex + bestData.len;
-        }
-
-        EL.outputDiv.innerHTML = resultParts.join('');
-        EL.countMatch.textContent = countM;
-        EL.countReplace.textContent = countR;
-        updateActionButtonsState();
-    }
-
-    /* ==========================================================================
-       5. Feature Modules
-       ========================================================================== */
-
-    /* --- History Module --- */
-    function saveHistorySnapshot() {
-        if (STATE.isSynced) return;
-
-        const content = EL.outputDiv.innerHTML;
-        const cursor = getCursorOffset(EL.outputDiv);
-
-        if (STATE.history.pointer >= 0 && STATE.history.stack[STATE.history.pointer].content === content) {
-            return;
-        }
-
-        if (STATE.history.pointer < STATE.history.stack.length - 1) {
-            STATE.history.stack = STATE.history.stack.slice(0, STATE.history.pointer + 1);
-        }
-
-        STATE.history.stack.push({ content, cursor });
-
-        if (STATE.history.stack.length > STATE.history.limit) {
-            STATE.history.stack.shift();
-        } else {
-            STATE.history.pointer++;
-        }
-    }
-
-    const debouncedSaveHistory = () => {
-        clearTimeout(STATE.history.timer);
-        STATE.history.timer = setTimeout(saveHistorySnapshot, CONFIG.HISTORY_DEBOUNCE);
-    };
-
-    function performHistoryAction(isUndo) {
-        if (isUndo ? STATE.history.pointer > 0 : STATE.history.pointer < STATE.history.stack.length - 1) {
-            STATE.history.pointer += isUndo ? -1 : 1;
-            const s = STATE.history.stack[STATE.history.pointer];
-            EL.outputDiv.innerHTML = s.content;
-            setCursorOffset(EL.outputDiv, s.cursor);
-            updateActionButtonsState();
-        }
-    }
-
-    /* --- Manual Edit Helper --- */
+    // Inserts a node (like a newline or span) at the current cursor
     function insertNodeAtCursor(node) {
         const sel = window.getSelection();
         if (!sel.rangeCount) return;
@@ -504,7 +721,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const range = sel.getRangeAt(0);
         range.deleteContents();
 
-        // Split styled span if needed
+        // If insert happens inside a styled span (diff), we must split it
+        // so the new content isn't styled as diff
         const anchor = range.startContainer;
         const parent = anchor.parentElement;
 
@@ -518,6 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
             parent.after(part2);
             parent.after(node);
 
+            // Cleanup empty nodes
             if (!parent.textContent) parent.remove();
             if (!part2.textContent) part2.remove();
         } else {
@@ -531,7 +750,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sel.addRange(newRange);
     }
 
-    // Wrap newly typed chars (Manual Mode)
+    // Wraps newly typed text in a 'diff-user' span (User Edit highlight)
     function wrapLastChars(len) {
         if (!len) return;
 
@@ -572,36 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sel.addRange(cr);
     }
 
-    /* --- File & Keywords --- */
-    function readFileContent(file, callback) {
-        if (file.size > CONFIG.MAX_FILE_SIZE) {
-            return showToast(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
-        }
-        if (/^(image|video|audio|application\/(pdf|zip))/.test(file.type)) {
-            return showToast('Only text files allowed');
-        }
-
-        const r = new FileReader();
-        r.onload = e => {
-            callback(e.target.result);
-            processText();
-        };
-        r.readAsText(file);
-    }
-
-    function handleFileUpload(input, area, display) {
-        if (input.files[0]) {
-            readFileContent(input.files[0], txt => {
-                if (display) display.textContent = input.files[0].name;
-                area.value = txt;
-                input.value = '';
-                if (area === EL.keywordsInput) {
-                    STATE.isKeywordsDirty = true;
-                    setTimeout(syncBackdrop, 0);
-                }
-            });
-        }
-    }
+    /* --- 5.4 Syntax Highlighting (for Keywords Input) --- */
 
     function syncBackdrop() {
         if (!EL.keywordsBackdrop || !EL.keywordsInput) return;
@@ -636,10 +826,6 @@ document.addEventListener('DOMContentLoaded', () => {
         EL.keywordsBackdrop.scrollLeft = EL.keywordsInput.scrollLeft;
     }
 
-    /* ==========================================================================
-       6. Event Listeners
-       ========================================================================== */
-
     const initSyntaxHighlighting = () => {
         syncBackdrop();
         new ResizeObserver(() => {
@@ -647,7 +833,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }).observe(EL.keywordsInput);
     };
 
-    const initDragAndDrop = () => {
+
+    /* ==========================================================================================
+       [6] INITIALIZATION & EVENT LISTENERS
+       - Drag & Drop, Button Clicks, Keyboard Shortcuts
+       ========================================================================================== */
+
+    /** Initializes Drag & Drop for file inputs */
+    function initDragAndDrop() {
         const handleDrop = (e, area, nameDisplay) => {
             e.preventDefault();
             e.target.closest('.input-wrapper')?.classList.remove('drag-active');
@@ -681,11 +874,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             wrap.addEventListener('drop', e => handleDrop(e, el, name));
         });
-    };
+    }
 
-    // --- Listeners Registration ---
+    // --- Wire up all Event Listeners ---
 
-    // Inputs
+    // 1. Text Inputs (Triggers search/highlight)
     EL.sourceInput.addEventListener('input', requestUpdate);
     EL.keywordsInput.addEventListener('input', () => {
         STATE.isKeywordsDirty = true;
@@ -699,7 +892,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // File Uploads
+    // 2. File Upload Buttons
     if (EL.uploadSource) {
         EL.uploadSource.addEventListener('change', () => handleFileUpload(EL.uploadSource, EL.sourceInput, EL.fileNameSource));
     }
@@ -707,12 +900,13 @@ document.addEventListener('DOMContentLoaded', () => {
         EL.uploadKeywords.addEventListener('change', () => handleFileUpload(EL.uploadKeywords, EL.keywordsInput, EL.fileNameKeywords));
     }
 
-    // UI Controls
+    // 3. UI Controls (Theme, Font, Keywords Lock)
     EL.btnTheme?.addEventListener('click', toggleTheme);
     EL.btnFontInc?.addEventListener('click', () => updateFontSize(1));
     EL.btnFontDec?.addEventListener('click', () => updateFontSize(-1));
+    EL.btnKeywordsLock?.addEventListener('click', toggleKeywordsLock);
 
-    // Sync Toggle
+    // 4. Sync/Edit Mode Toggle
     EL.btnSyncToggle?.addEventListener('click', () => {
         STATE.isSynced = !STATE.isSynced;
 
@@ -728,16 +922,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (STATE.isSynced) {
             EL.outputDiv.style.outline = 'none';
-            processText();
+            processText(); // Re-run search
         } else {
             EL.outputDiv.focus();
+            // Initialize history for the first time entering manual mode
             STATE.history.stack = [{ content: EL.outputDiv.innerHTML, cursor: 0 }];
             STATE.history.pointer = 0;
         }
         refreshIcons();
     });
 
-    // Clipboard Actions
+    // 5. Clipboard & Download
+    /** 
+     * Handles copy to clipboard with visual feedback (check icon)
+     */
     const copyHandler = (btn, textFn) => {
         if (!textFn()) return;
         navigator.clipboard.writeText(textFn()).then(() => {
@@ -760,7 +958,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const blob = new Blob([EL.outputDiv.innerText], { type: 'text/plain' });
         const now = new Date();
-        const ts = now.toISOString().slice(2, 16).replace(/[-:]/g, '').replace('T', '-'); // YYMMDD-HHMM
+        const ts = now.toISOString().slice(2, 16).replace(/[-:]/g, '').replace('T', '-');
 
         let name = EL.fileNameSource.textContent || 'result';
         if (name.includes('.')) name = name.substring(0, name.lastIndexOf('.'));
@@ -775,7 +973,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Download started', 'success');
     });
 
-    // Manual Edit Events
+    // 6. Manual Edit Events (Undo/Redo/Typing)
     EL.outputDiv.addEventListener('compositionend', e => {
         if (!STATE.isSynced && e.data) wrapLastChars(e.data.length);
     });
@@ -790,19 +988,20 @@ document.addEventListener('DOMContentLoaded', () => {
     EL.outputDiv.addEventListener('keydown', e => {
         if (STATE.isSynced) return;
 
-        // Undo/Redo
+        // Ctrl+Z (Undo)
         if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
             e.preventDefault();
             performHistoryAction(true);
             return;
         }
+        // Ctrl+Y or Ctrl+Shift+Z (Redo)
         if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
             e.preventDefault();
             performHistoryAction(false);
             return;
         }
 
-        // Enter Key
+        // Enter Key override
         if (e.key === 'Enter') {
             e.preventDefault();
             saveHistorySnapshot();
@@ -831,8 +1030,13 @@ document.addEventListener('DOMContentLoaded', () => {
         updateActionButtonsState();
     });
 
-    // Initialization
+    // --- Start Application ---
+    // Set initial keywords lock state
+    if (EL.keywordsInput) {
+        EL.keywordsInput.readOnly = STATE.isKeywordsLocked;
+    }
+
     initSyntaxHighlighting();
     initDragAndDrop();
-    processText();
+    processText(); // Initial empty run to set states
 });

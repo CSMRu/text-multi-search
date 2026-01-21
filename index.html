@@ -5,6 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google" content="notranslate">
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self';
+        style-src 'self' https://fonts.googleapis.com 'unsafe-inline';
+        font-src https://fonts.gstatic.com;
+        img-src 'self' data:;
+    ">
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <title>text multi search</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,8 +22,8 @@
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/components.css">
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Lucide Icons (Offline) -->
+    <script src="js/icons.js"></script>
 </head>
 
 <body>
@@ -25,7 +32,7 @@
     <header class="toolbar">
         <div class="brand">
             <h1>text <span class="text-highlight">m</span>ulti <span class="text-highlight">s</span>earch <span
-                    class="version-tag">v26.0122a</span></h1>
+                    class="version-tag">v26.0122b</span></h1>
         </div>
 
         <div class="controls">
@@ -70,8 +77,7 @@
                         <button class="btn btn-sm" id="btn-copy-source" title="Copy Source Text">
                             <i data-lucide="copy"></i>
                         </button>
-                        <button class="btn btn-sm" onclick="document.getElementById('upload-source').click()"
-                            title="Upload File">
+                        <button class="btn btn-sm" id="btn-upload-source" title="Upload File">
                             <i data-lucide="upload"></i>
                         </button>
                     </div>
@@ -100,8 +106,11 @@
                         <span>Search <span class="text-highlight">K</span>eywords</span>
                         <input type="file" id="upload-keywords"
                             accept=".txt,.md,.js,.json,.xml,.html,.css,.log,.svg,text/*" hidden>
-                        <button class="btn btn-sm" onclick="document.getElementById('upload-keywords').click()"
-                            title="Upload File">
+                        <button class="btn btn-sm btn-keywords-lock locked" id="btn-keywords-lock"
+                            title="Unlock Keywords">
+                            <i data-lucide="lock"></i>
+                        </button>
+                        <button class="btn btn-sm" id="btn-upload-keywords" title="Upload File">
                             <i data-lucide="upload"></i>
                         </button>
 
@@ -134,7 +143,7 @@
                     </div>
                 </div>
                 <div class="input-wrapper">
-                    <!-- Backdrop for syntax highlighting (mirrors textarea content) -->
+                    <!-- Syntax Highlight Backdrop -->
                     <div id="keywords-backdrop" class="textarea-backdrop"></div>
                     <textarea id="text-keywords"
                         placeholder="Enter keywords (one per line)...&#10;Example:&#10;apple&#10;orange///fruit&#10;/// comment"></textarea>
@@ -188,10 +197,6 @@
 
     <!-- Core Modules -->
     <script src="js/app.js"></script>
-    <script>
-        // Initialize Lucide icons
-        lucide.createIcons();
-    </script>
 </body>
 
 </html>

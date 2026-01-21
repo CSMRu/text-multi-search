@@ -112,11 +112,36 @@
     transition: transform 0.3s ease;
 }
 
+/* Lock Button Visual States */
+.btn-keywords-lock svg {
+    transition: transform 0.2s;
+}
+
+.btn-keywords-lock.locked {
+    color: #16a34a;
+    border-color: #16a34a;
+}
+
+.btn-keywords-lock.unlocked {
+    color: #d97706;
+    border-color: #d97706;
+}
+
+[data-theme="dark"] .btn-keywords-lock.locked {
+    color: #4ade80;
+    border-color: #4ade80;
+}
+
+[data-theme="dark"] .btn-keywords-lock.unlocked {
+    color: #fbbf24;
+    border-color: #fbbf24;
+}
+
 /* ==========================================================================
    Input Areas
    ========================================================================== */
 .input-wrapper {
-    /* Anchor for absolute positioning of drop-overlay */
+    /* Drop-overlay anchor */
     position: relative;
     flex: 1;
     display: flex;
@@ -163,24 +188,28 @@ textarea {
     box-sizing: border-box;
 }
 
-/* Ensure textarea sits on top and text is transparent */
+/* Textarea Transparency Layer */
 .input-wrapper textarea {
     position: relative;
     z-index: 1;
     background-color: transparent;
 }
 
-/* Only make the specific keyword textarea transparent for highlighting */
+/* Keyword Input Specifics */
 #text-keywords {
     color: transparent;
     caret-color: var(--text-main);
+}
+
+#text-keywords[readonly] {
+    cursor: not-allowed;
 }
 
 #text-keywords::placeholder {
     color: var(--text-muted);
 }
 
-/* Syntax highlighting classes for keyword textarea */
+/* Syntax Tokens */
 .textarea-backdrop .comment {
     color: var(--syntax-comment);
 }
@@ -620,7 +649,7 @@ textarea {
     contain: layout paint style;
 }
 
-/* Diff Highlighting (Important to override base text color) */
+/* Diff Colors */
 .diff-add {
     background-color: var(--diff-add-bg);
     color: var(--diff-add-text) !important;
