@@ -28,8 +28,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- File Operations ---
         uploadSource: document.getElementById('upload-source'),
+        btnUploadSource: document.getElementById('btn-upload-source'),
         fileNameSource: document.getElementById('file-name-source'),
         uploadKeywords: document.getElementById('upload-keywords'),
+        btnUploadKeywords: document.getElementById('btn-upload-keywords'),
         fileNameKeywords: document.getElementById('file-name-keywords'),
 
         // --- Toolbar Controls ---
@@ -893,6 +895,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // 2. File Upload Buttons
+    // Trigger hidden file input when upload button is clicked
+    EL.btnUploadSource?.addEventListener('click', () => EL.uploadSource?.click());
+    EL.btnUploadKeywords?.addEventListener('click', () => EL.uploadKeywords?.click());
+
+    // Handle file selection
     if (EL.uploadSource) {
         EL.uploadSource.addEventListener('change', () => handleFileUpload(EL.uploadSource, EL.sourceInput, EL.fileNameSource));
     }
