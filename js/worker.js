@@ -176,9 +176,14 @@
             if (priorityIdx < priorityRanges.length) {
                 const pRange = priorityRanges[priorityIdx];
                 if (cursor === pRange.start) {
-                    const content = getDisplayContent(pRange.matcher, pRange.matchData);
+                    let content = getDisplayContent(pRange.matcher, pRange.matchData);
                     const cls = pRange.matcher.isReplacement ? 'diff-replace' : 'diff-add';
                     if (pRange.matcher.isReplacement) countR++; else countM++;
+                    const originalText = pRange.matchData.text;
+                    const trailingNewline = originalText.match(/\r?\n$/)?.[0] || '';
+                    if (pRange.matcher.isReplacement && content && !content.endsWith('\n') && trailingNewline) {
+                        content += trailingNewline;
+                    }
                     resultParts.push(`<span class="${cls}">${escapeHtml(content)}</span>`);
                     cursor = pRange.end;
                     priorityIdx++;
