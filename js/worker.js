@@ -26,6 +26,7 @@
 
         lines.forEach(line => {
             const trimmed = line.trim();
+            let isDel = false;
             if (!trimmed || trimmed.startsWith('///')) return;
 
             let search = trimmed;
@@ -36,7 +37,10 @@
             if (sepIndex !== -1) {
                 search = trimmed.substring(0, sepIndex).trim();
                 replace = trimmed.substring(sepIndex + 3).trim();
-                if (replace === '[del]') replace = '';
+                if (replace === '[del]') {
+                    replace = '';
+                    isDel = true;
+                }
                 isReplacement = true;
             }
 
@@ -95,7 +99,8 @@
                     replace,
                     replacePattern,
                     isReplacement,
-                    isLineMode
+                    isLineMode,
+                    isDel
                 });
             } catch (e) {
                 // Ignore invalid regex in worker
@@ -181,7 +186,11 @@
                     if (pRange.matcher.isReplacement) countR++; else countM++;
                     const originalText = pRange.matchData.text;
                     const trailingNewline = originalText.match(/\r?\n$/)?.[0] || '';
-                    if (pRange.matcher.isReplacement && content && !content.endsWith('\n') && trailingNewline) {
+
+                    // Preserve newline if not [del] mode in Line Mode, even if content is empty
+                    const shouldPreserveNewline = content || (pRange.matcher.isLineMode && !pRange.matcher.isDel);
+
+                    if (pRange.matcher.isReplacement && shouldPreserveNewline && !content.endsWith('\n') && trailingNewline) {
                         content += trailingNewline;
                     }
                     resultParts.push(`<span class="${cls}">${escapeHtml(content)}</span>`);

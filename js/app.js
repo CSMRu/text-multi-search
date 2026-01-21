@@ -150,6 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const lines = keywordsValue.split('\n');
             lines.forEach(line => {
                 const trimmed = line.trim();
+                let isDel = false;
                 if (!trimmed || trimmed.startsWith('///')) return;
 
                 let search = trimmed;
@@ -160,7 +161,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (sepIndex !== -1) {
                     search = trimmed.substring(0, sepIndex).trim();
                     replace = trimmed.substring(sepIndex + 3).trim();
-                    if (replace === '[del]') replace = '';
+                    if (replace === '[del]') {
+                        replace = '';
+                        isDel = true;
+                    }
                     isReplacement = true;
                 }
 
@@ -209,7 +213,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         replace,
                         replacePattern,
                         isReplacement,
-                        isLineMode
+                        isLineMode,
+                        isDel
                     });
                 } catch (e) {
                     console.warn("Invalid Regex:", search, e);
@@ -277,7 +282,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (pRange.matcher.isReplacement) countR++; else countM++;
                         const originalText = pRange.matchData.text;
                         const trailingNewline = originalText.match(/\r?\n$/)?.[0] || '';
-                        if (pRange.matcher.isReplacement && content && !content.endsWith('\n') && trailingNewline) {
+
+                        // Preserve newline if not [del] mode in Line Mode, even if content is empty
+                        const shouldPreserveNewline = content || (pRange.matcher.isLineMode && !pRange.matcher.isDel);
+
+                        if (pRange.matcher.isReplacement && shouldPreserveNewline && !content.endsWith('\n') && trailingNewline) {
                             content += trailingNewline;
                         }
                         resultParts.push(`<span class="${cls}">${escapeHtml(content)}</span>`);
