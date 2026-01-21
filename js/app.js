@@ -34,14 +34,14 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadKeywords: document.getElementById('upload-keywords'),
         fileNameKeywords: document.getElementById('file-name-keywords'),
 
-        // Controls & Buttons
+        // Controls
         btnTheme: document.getElementById('btn-theme'),
         btnFontInc: document.getElementById('font-increase'),
         btnFontDec: document.getElementById('font-decrease'),
         fontSizeDisplay: document.getElementById('font-size-display'),
-
         btnSyncToggle: document.getElementById('btn-sync-toggle'),
-        btnRegexToggle: document.getElementById('btn-regex-toggle'),
+
+        // Export Actions
         btnCopySource: document.getElementById('btn-copy-source'),
         btnCopyResult: document.getElementById('btn-copy-result'),
         btnDownloadResult: document.getElementById('btn-download-result'),
@@ -54,14 +54,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const STATE = {
         fontSize: 12,        // Current font size in pt
         isSynced: true,      // true: Search Mode (Read-only), false: Edit Mode (Manual)
-        isRegexMode: false,  // true: Treat keywords as Regex
         isKeywordsDirty: true, // Flag to rebuild matchers only when keywords change
-
-        // Caching for performance
         cachedMatchers: null,
         debounceTimer: null,
-
-        // History (Undo/Redo)
         history: {
             stack: [],
             pointer: -1,
@@ -76,12 +71,10 @@ document.addEventListener('DOMContentLoaded', () => {
         HISTORY_DEBOUNCE: 400
     };
 
-
     /* ==========================================================================
        2. Utility Functions
        ========================================================================== */
 
-    // HTML entity mapping for escaping special characters in output
     const htmlMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
 
     function escapeHtml(text) {
@@ -93,39 +86,37 @@ document.addEventListener('DOMContentLoaded', () => {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
-    // Refresh Lucide icons after dynamic DOM updates
     function refreshIcons() {
         if (window.lucide) window.lucide.createIcons();
     }
 
-    // Debounces input events to prevent excessive processing during typing
     function requestUpdate() {
         if (STATE.debounceTimer) clearTimeout(STATE.debounceTimer);
-        STATE.debounceTimer = setTimeout(() => {
-            processText();
-        }, CONFIG.DEBOUNCE_DELAY);
+        STATE.debounceTimer = setTimeout(processText, CONFIG.DEBOUNCE_DELAY);
     }
 
-    // Check if element is a styled diff span (add, replace, or original)
-    const isStyledSpan = (el) => el && (
-        el.classList.contains('diff-add') ||
-        el.classList.contains('diff-replace') ||
-        el.classList.contains('diff-original')
-    );
+    function isStyledSpan(el) {
+        return el && (
+            el.classList.contains('diff-add') ||
+            el.classList.contains('diff-replace') ||
+            el.classList.contains('diff-original')
+        );
+    }
 
-    // Calculates global character offset relative to container, handling nested nodes
-    // Essential for tracking cursor position across contenteditable updates
+    // Calculates global character offset relative to container
     function getCursorOffset(container) {
         const sel = window.getSelection();
         if (!sel.rangeCount) return 0;
+
         const range = sel.getRangeAt(0);
         const preCaretRange = range.cloneRange();
         preCaretRange.selectNodeContents(container);
         preCaretRange.setEnd(range.endContainer, range.endOffset);
+
         return preCaretRange.toString().length;
     }
 
-    // Helper: Set global cursor position by character offset
+    // Set global cursor position by character offset
     function setCursorOffset(container, offset) {
         const range = document.createRange();
         const sel = window.getSelection();
@@ -144,9 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentOffset += len;
                 }
             } else {
-                for (let i = 0; i < node.childNodes.length; i++) {
-                    traverse(node.childNodes[i]);
-                }
+                node.childNodes.forEach(traverse);
             }
         }
 
@@ -156,11 +145,9 @@ document.addEventListener('DOMContentLoaded', () => {
             range.selectNodeContents(container);
             range.collapse(false);
         }
-
         sel.removeAllRanges();
         sel.addRange(range);
     }
-
 
     /* ==========================================================================
        3. UI Component Functions
@@ -170,15 +157,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('toast-container');
         if (!container) return;
 
-        const iconMap = { error: 'alert-circle', success: 'check-circle', info: 'info' };
-        const icon = iconMap[type] || 'alert-circle';
-
+        const icon = { error: 'alert-circle', success: 'check-circle', info: 'info' }[type] || 'alert-circle';
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
-        toast.innerHTML = `
-            <span class="toast-icon"><i data-lucide="${icon}"></i></span>
-            <span>${message}</span>
-        `;
+        toast.innerHTML = `<span class="toast-icon"><i data-lucide="${icon}"></i></span><span>${message}</span>`;
+
         container.appendChild(toast);
         refreshIcons();
 
@@ -189,33 +172,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateActionButtonsState() {
-        const setBtnState = (btn, hasContent) => {
+        const hasResult = EL.outputDiv.textContent.trim().length > 0;
+        const hasSource = EL.sourceInput.value.trim().length > 0;
+
+        const setBtnState = (btn, isActive) => {
             if (btn) {
-                btn.disabled = !hasContent;
-                btn.style.opacity = hasContent ? '1' : '0.5';
-                btn.style.pointerEvents = hasContent ? 'auto' : 'none';
+                btn.disabled = !isActive;
+                btn.style.opacity = isActive ? '1' : '0.5';
+                btn.style.pointerEvents = isActive ? 'auto' : 'none';
             }
         };
 
-        const hasResultText = EL.outputDiv.textContent.trim().length > 0;
-        setBtnState(EL.btnDownloadResult, hasResultText);
-        setBtnState(EL.btnCopyResult, hasResultText);
-
-        const hasSourceText = EL.sourceInput.value.trim().length > 0;
-        setBtnState(EL.btnCopySource, hasSourceText);
+        setBtnState(EL.btnDownloadResult, hasResult);
+        setBtnState(EL.btnCopyResult, hasResult);
+        setBtnState(EL.btnCopySource, hasSource);
     }
 
-    function updateFontSize() {
+    function updateFontSize(delta) {
+        if (delta) {
+            STATE.fontSize = Math.max(8, Math.min(24, STATE.fontSize + delta));
+        }
         EL.fontSizeDisplay.textContent = `${STATE.fontSize}pt`;
-        // Convert pt to px approximate (1pt = 1.333px)
-        const sizePx = STATE.fontSize * 1.333;
-        document.documentElement.style.setProperty('--font-size-base', `${sizePx}px`);
+        document.documentElement.style.setProperty('--font-size-base', `${STATE.fontSize * 1.333}px`);
     }
 
     function toggleTheme() {
         const html = document.documentElement;
-        const currentTheme = html.getAttribute('data-theme');
-        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        const newTheme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
         html.setAttribute('data-theme', newTheme);
 
         if (EL.btnTheme) {
@@ -224,18 +207,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-
     /* ==========================================================================
        4. Core Logic (Search Platform)
        ========================================================================== */
 
-    /**
-     * Parses keyword input and builds regex matchers for search/replace.
-     * Supports: basic keywords, ///replacement, [num]/[cjk] wildcards, [del] deletion
-     */
     function buildMatchers(keywordsValue) {
-        const lines = keywordsValue.split('\n');
         const matchers = [];
+        const lines = keywordsValue.split('\n');
 
         lines.forEach(line => {
             const trimmed = line.trim();
@@ -245,13 +223,10 @@ document.addEventListener('DOMContentLoaded', () => {
             let replace = trimmed;
             let isReplacement = false;
 
-            const separator = '///';
-            const sepIndex = trimmed.indexOf(separator);
-
+            const sepIndex = trimmed.indexOf('///');
             if (sepIndex !== -1) {
                 search = trimmed.substring(0, sepIndex).trim();
-                replace = trimmed.substring(sepIndex + separator.length).trim();
-                // [del] reserved word: delete matched text (exact match only)
+                replace = trimmed.substring(sepIndex + 3).trim();
                 if (replace === '[del]') replace = '';
                 isReplacement = true;
             }
@@ -259,39 +234,56 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!search) return;
 
             try {
-                let regex;
-                let replacePattern = replace; // For wildcard capture replacement
-                if (STATE.isRegexMode && search.startsWith('/') && search.endsWith('/') && search.length > 2) {
-                    regex = new RegExp(search.slice(1, -1), 'g');
-                } else {
-                    // Smart Wildcard with Capture Groups
-                    // 1. Escape the base string to treat special chars literally
-                    let pattern = escapeRegExp(search);
+                let replacePattern = replace;
+                let isLineMode = false;
 
-                    // 2. Track capture group order and convert wildcards to capture groups
-                    const wildcardOrder = [];
-                    pattern = pattern.replace(/\\\[(num|cjk)\\\]/g, (match, type) => {
-                        wildcardOrder.push(type);
-                        if (type === 'num') return '(\\d+)';
-                        if (type === 'cjk') return '([\u4E00-\u9FFF])';
-                        return match;
-                    });
-
-                    // 3. Build replacePattern: convert [num]/[cjk] in replace string to $1, $2, etc.
-                    if (isReplacement && wildcardOrder.length > 0) {
-                        let groupIndex = 0;
-                        replacePattern = replace.replace(/\[(num|cjk)\]/g, (match, type) => {
-                            if (groupIndex < wildcardOrder.length && wildcardOrder[groupIndex] === type) {
-                                groupIndex++;
-                                return `$${groupIndex}`;
-                            }
-                            return match; // Keep original if type mismatch or no more groups
-                        });
-                    }
-
-                    regex = new RegExp(pattern, 'g');
+                if (search.startsWith('[line]')) {
+                    isLineMode = true;
+                    search = search.substring(6).trim();
+                    if (!search) return;
                 }
-                matchers.push({ regex, searchStr: search, replace, replacePattern, isReplacement });
+
+                // Prepare Regex Pattern
+                let pattern = escapeRegExp(search);
+
+                // [or] Support
+                pattern = pattern.replace(/\s*\\\[or\\\]\s*/g, '|');
+
+                // Wildcard Support ([num], [cjk])
+                const wildcardOrder = [];
+                pattern = pattern.replace(/\\\[(num|cjk)\\\]/g, (match, type) => {
+                    wildcardOrder.push(type);
+                    if (type === 'num') return '(\\d+)';
+                    if (type === 'cjk') return '([\u4E00-\u9FFF])';
+                    return match;
+                });
+
+                if (isReplacement) {
+                    // Safe Mode: Treat ALL '$' as literal '$$' unless strictly needed for capture groups
+                    replacePattern = replace.replace(/\$(?!\d)/g, () => '$$$$');
+
+                    // Restore functional capture groups for [num]/[cjk]
+                    if (wildcardOrder.length > 0) {
+                        let gIdx = 0;
+                        replacePattern = replacePattern.replace(/\[(num|cjk)\]/g, (m, type) =>
+                            (gIdx < wildcardOrder.length && wildcardOrder[gIdx] === type) ? `$${++gIdx}` : m
+                        );
+                    }
+                }
+
+                // Handle [line] token in replacement
+                if (isLineMode && wildcardOrder.length === 0 && isReplacement && replacePattern.includes('[line]')) {
+                    replacePattern = replacePattern.replace(/\[line\]/g, () => '$$LINE$$');
+                }
+
+                matchers.push({
+                    regex: new RegExp(pattern, 'g'),
+                    searchStr: search,
+                    replace,
+                    replacePattern,
+                    isReplacement,
+                    isLineMode
+                });
             } catch (e) {
                 console.warn("Invalid Regex:", search, e);
             }
@@ -299,15 +291,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return matchers;
     }
 
-    /** Main search/replace engine - scans source text and applies all matchers */
+    /** Main search/replace engine */
     function processText() {
         if (!STATE.isSynced) return;
 
         const sourceText = EL.sourceInput.value;
-        const keywordsValue = EL.keywordsInput.value;
-
         if (STATE.isKeywordsDirty) {
-            STATE.cachedMatchers = buildMatchers(keywordsValue);
+            STATE.cachedMatchers = buildMatchers(EL.keywordsInput.value);
             STATE.isKeywordsDirty = false;
         }
 
@@ -326,71 +316,135 @@ document.addEventListener('DOMContentLoaded', () => {
         let countR = 0;
         const resultParts = [];
 
-        matchers.forEach(m => m.regex.lastIndex = 0);
-        const nextMatches = new Array(matchers.length).fill(undefined);
+        // Helper: Calculate replacement content (shared by Pass 1 & 2)
+        const getDisplayContent = (matcher, matchData) => {
+            if (!matcher.isReplacement) return matchData.text;
 
-        // Jump-Scanning Loop
+            // Replace $$LINE$$, $$, and $n with actual content
+            return matcher.replacePattern.replace(/(\$\$LINE\$\$)|(\$\$)|(\$(\d+))/g, (match, lineToken, escDollar, capGroup, grpIdx) => {
+                if (lineToken) {
+                    return matchData.text.replace(/\r?\n$/, '');
+                }
+                if (escDollar) return '$';
+                if (capGroup) {
+                    const idx = parseInt(grpIdx, 10) - 1;
+                    return (matchData.groups[idx] !== undefined) ? matchData.groups[idx] : '';
+                }
+                return match;
+            });
+        };
+
+        // Pass 1: Pre-scan Priority Ranges ([line] mode)
+        const priorityRanges = [];
+        const lineMatchers = matchers.filter(m => m.isLineMode);
+
+        if (lineMatchers.length > 0) {
+            let lineRegex = /^[\s\S]*?(\r?\n|$)/gm;
+            let lineMatch;
+
+            while ((lineMatch = lineRegex.exec(sourceText)) !== null) {
+                if (!lineMatch[0]) break; // EOF check
+
+                for (let m of lineMatchers) {
+                    m.regex.lastIndex = 0;
+                    const res = m.regex.exec(lineMatch[0]);
+                    if (res) {
+                        priorityRanges.push({
+                            start: lineMatch.index,
+                            end: lineMatch.index + lineMatch[0].length,
+                            matcher: m,
+                            matchData: {
+                                index: lineMatch.index,
+                                text: lineMatch[0],
+                                len: lineMatch[0].length,
+                                groups: res.slice(1)
+                            }
+                        });
+                        break; // First match wins for this line
+                    }
+                }
+            }
+        }
+
+        // Pass 2: Main Scan (Text Mode)
+        const textMatchers = matchers.filter(m => !m.isLineMode);
+        textMatchers.forEach(m => m.regex.lastIndex = 0);
+
+        const nextMatches = new Array(textMatchers.length).fill(undefined);
+        let priorityIdx = 0;
+
         while (cursor < sourceText.length) {
-            let bestMatcherIndex = -1;
+            // Check Priority Range Overlap
+            if (priorityIdx < priorityRanges.length) {
+                const pRange = priorityRanges[priorityIdx];
+
+                if (cursor === pRange.start) {
+                    // Execute Priority Match
+                    const content = getDisplayContent(pRange.matcher, pRange.matchData);
+                    const cls = pRange.matcher.isReplacement ? 'diff-replace' : 'diff-add';
+
+                    if (pRange.matcher.isReplacement) countR++; else countM++;
+                    resultParts.push(`<span class="${cls}">${escapeHtml(content)}</span>`);
+
+                    cursor = pRange.end;
+                    priorityIdx++;
+                    continue;
+                }
+            }
+
+            // Limit search to next priority range
+            let limit = (priorityIdx < priorityRanges.length) ? priorityRanges[priorityIdx].start : Infinity;
+            let bestIdx = -1;
             let minIndex = Infinity;
             let bestLen = 0;
 
-            for (let i = 0; i < matchers.length; i++) {
-                const m = matchers[i];
-                let match = nextMatches[i];
+            // Find best text match
+            for (let i = 0; i < textMatchers.length; i++) {
+                const m = textMatchers[i];
 
-                if (match === undefined || (match && match.index < cursor)) {
+                if (!nextMatches[i] || nextMatches[i].index < cursor) {
                     m.regex.lastIndex = cursor;
                     const res = m.regex.exec(sourceText);
                     nextMatches[i] = res ? { index: res.index, text: res[0], len: res[0].length, groups: res.slice(1) } : null;
-                    match = nextMatches[i];
                 }
 
+                const match = nextMatches[i];
                 if (match) {
-                    if (match.index < minIndex) {
+                    if (match.index >= limit || match.index + match.len > limit) continue; // Skip overlaps
+
+                    if (match.index < minIndex || (match.index === minIndex && match.len > bestLen)) {
                         minIndex = match.index;
                         bestLen = match.len;
-                        bestMatcherIndex = i;
-                    } else if (match.index === minIndex && match.len > bestLen) {
-                        bestLen = match.len;
-                        bestMatcherIndex = i;
+                        bestIdx = i;
                     }
                 }
             }
 
-            if (bestMatcherIndex === -1) {
-                resultParts.push(`<span class="diff-original">${escapeHtml(sourceText.substring(cursor))}</span>`);
-                break;
+            // No match found or match is beyond limit
+            if (bestIdx === -1) {
+                const nextTarget = (limit === Infinity) ? sourceText.length : limit;
+                if (nextTarget > cursor) {
+                    resultParts.push(`<span class="diff-original">${escapeHtml(sourceText.substring(cursor, nextTarget))}</span>`);
+                }
+                cursor = nextTarget;
+                continue;
             }
 
+            // Gap filling before match
             if (minIndex > cursor) {
                 resultParts.push(`<span class="diff-original">${escapeHtml(sourceText.substring(cursor, minIndex))}</span>`);
             }
 
-            const bestM = matchers[bestMatcherIndex];
-            const bestMatchData = nextMatches[bestMatcherIndex];
-            const className = bestM.isReplacement ? 'diff-replace' : 'diff-add';
-            let displayContent = bestMatchData.text;
-            if (bestM.isReplacement) {
-                // Replace $1, $2, etc. with captured group values
-                displayContent = bestM.replacePattern.replace(/\$(\d+)/g, (m, n) => {
-                    const idx = parseInt(n, 10) - 1;
-                    return idx < bestMatchData.groups.length ? bestMatchData.groups[idx] : m;
-                });
-            }
+            // Execute Text Match
+            const bestM = textMatchers[bestIdx];
+            const bestData = nextMatches[bestIdx];
+            const content = getDisplayContent(bestM, bestData);
+            const cls = bestM.isReplacement ? 'diff-replace' : 'diff-add';
 
             if (bestM.isReplacement) countR++; else countM++;
-            resultParts.push(`<span class="${className}">${escapeHtml(displayContent)}</span>`);
+            resultParts.push(`<span class="${cls}">${escapeHtml(content)}</span>`);
 
-            const nextCursor = minIndex + bestMatchData.len;
-            if (nextCursor === cursor) {
-                if (cursor < sourceText.length) {
-                    resultParts.push(`<span class="diff-original">${escapeHtml(sourceText[cursor])}</span>`);
-                }
-                cursor++;
-            } else {
-                cursor = nextCursor;
-            }
+            cursor = minIndex + bestData.len;
         }
 
         EL.outputDiv.innerHTML = resultParts.join('');
@@ -399,12 +453,11 @@ document.addEventListener('DOMContentLoaded', () => {
         updateActionButtonsState();
     }
 
-
     /* ==========================================================================
        5. Feature Modules
        ========================================================================== */
 
-    /* --- History Module (Undo/Redo) --- */
+    /* --- History Module --- */
     function saveHistorySnapshot() {
         if (STATE.isSynced) return;
 
@@ -428,248 +481,211 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function debouncedSaveHistory() {
-        if (STATE.history.timer) clearTimeout(STATE.history.timer);
+    const debouncedSaveHistory = () => {
+        clearTimeout(STATE.history.timer);
         STATE.history.timer = setTimeout(saveHistorySnapshot, CONFIG.HISTORY_DEBOUNCE);
-    }
+    };
 
-    function performUndo() {
-        if (STATE.history.pointer > 0) {
-            STATE.history.pointer--;
-            const snapshot = STATE.history.stack[STATE.history.pointer];
-            EL.outputDiv.innerHTML = snapshot.content;
-            setCursorOffset(EL.outputDiv, snapshot.cursor);
+    function performHistoryAction(isUndo) {
+        if (isUndo ? STATE.history.pointer > 0 : STATE.history.pointer < STATE.history.stack.length - 1) {
+            STATE.history.pointer += isUndo ? -1 : 1;
+            const s = STATE.history.stack[STATE.history.pointer];
+            EL.outputDiv.innerHTML = s.content;
+            setCursorOffset(EL.outputDiv, s.cursor);
             updateActionButtonsState();
         }
     }
 
-    function performRedo() {
-        if (STATE.history.pointer < STATE.history.stack.length - 1) {
-            STATE.history.pointer++;
-            const snapshot = STATE.history.stack[STATE.history.pointer];
-            EL.outputDiv.innerHTML = snapshot.content;
-            setCursorOffset(EL.outputDiv, snapshot.cursor);
-            updateActionButtonsState();
+    /* --- Manual Edit Helper --- */
+    function insertNodeAtCursor(node) {
+        const sel = window.getSelection();
+        if (!sel.rangeCount) return;
+
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+
+        // Split styled span if needed
+        const anchor = range.startContainer;
+        const parent = anchor.parentElement;
+
+        if (anchor.nodeType === Node.TEXT_NODE && isStyledSpan(parent)) {
+            const latter = anchor.splitText(range.startOffset);
+            const part2 = parent.cloneNode(false);
+            part2.appendChild(latter);
+
+            while (latter.nextSibling) part2.appendChild(latter.nextSibling);
+
+            parent.after(part2);
+            parent.after(node);
+
+            if (!parent.textContent) parent.remove();
+            if (!part2.textContent) part2.remove();
+        } else {
+            range.insertNode(node);
         }
+
+        const newRange = document.createRange();
+        newRange.setStartAfter(node);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
     }
 
-    // Wrap newly typed characters in diff-user span when inside styled span
-    function wrapLastChars(length) {
-        if (!length) return;
+    // Wrap newly typed chars (Manual Mode)
+    function wrapLastChars(len) {
+        if (!len) return;
+
         const sel = window.getSelection();
         if (!sel.rangeCount) return;
 
         const range = sel.getRangeAt(0);
         const node = range.startContainer;
-        if (node.nodeType !== Node.TEXT_NODE) return;
+
+        if (node.nodeType !== Node.TEXT_NODE || !isStyledSpan(node.parentElement)) return;
+
+        const end = range.startOffset;
+        const start = end - len;
+        if (start < 0) return;
 
         const parent = node.parentElement;
-        if (!parent || !EL.outputDiv.contains(parent)) return;
-        if (!isStyledSpan(parent)) return;
+        const textWrap = node.splitText(start);
+        const textAfter = textWrap.splitText(len);
 
-        const endOffset = range.startOffset;
-        const startOffset = endOffset - length;
-        if (startOffset < 0) return;
+        const pClone = parent.cloneNode(false);
+        pClone.appendChild(textAfter);
+        while (textAfter.nextSibling) pClone.appendChild(textAfter.nextSibling);
 
-        try {
-            const textToWrap = node.splitText(startOffset);
-            const textAfter = textToWrap.splitText(length);
+        const span = document.createElement('span');
+        span.className = 'diff-user';
+        span.appendChild(textWrap);
 
-            const parentClone = parent.cloneNode(false);
-            parentClone.appendChild(textAfter);
-            while (textAfter.nextSibling) {
-                parentClone.appendChild(textAfter.nextSibling);
-            }
+        parent.after(pClone);
+        parent.after(span);
 
-            const newSpan = document.createElement('span');
-            newSpan.className = 'diff-user';
-            newSpan.appendChild(textToWrap);
+        if (!parent.textContent) parent.remove();
+        if (!pClone.textContent) pClone.remove();
 
-            parent.after(parentClone);
-            parent.after(newSpan);
-
-            if (!parent.textContent) parent.remove();
-            if (!parentClone.textContent) parentClone.remove();
-
-            const cursorRange = document.createRange();
-            cursorRange.selectNodeContents(newSpan);
-            cursorRange.collapse(false);
-            sel.removeAllRanges();
-            sel.addRange(cursorRange);
-        } catch (e) {
-            console.error('wrapLastChars failed:', e);
-        }
+        const cr = document.createRange();
+        cr.selectNodeContents(span);
+        cr.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(cr);
     }
 
-    // Split styled span and insert content between the parts (used for Enter/Paste)
-    function splitAndInsert(range, contentSpan) {
-        const anchor = range.startContainer;
-        const parent = anchor.parentElement;
-
-        if (anchor.nodeType === Node.TEXT_NODE && isStyledSpan(parent)) {
-            const latterTextNode = anchor.splitText(range.startOffset);
-            const part2Span = parent.cloneNode(false);
-            part2Span.appendChild(latterTextNode);
-
-            while (latterTextNode.nextSibling) {
-                part2Span.appendChild(latterTextNode.nextSibling);
-            }
-
-            parent.after(part2Span);
-            parent.after(contentSpan);
-
-            if (!parent.textContent) parent.remove();
-            if (!part2Span.textContent) part2Span.remove();
-            return true;
-        }
-        return false;
-    }
-
-    /** Validates and reads uploaded file, enforces size/type restrictions */
+    /* --- File & Keywords --- */
     function readFileContent(file, callback) {
         if (file.size > CONFIG.MAX_FILE_SIZE) {
-            showToast(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max: 1MB`);
-            return;
+            return showToast(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+        }
+        if (/^(image|video|audio|application\/(pdf|zip))/.test(file.type)) {
+            return showToast('Only text files allowed');
         }
 
-        // Check for common non-text types (Media, PDF, Archives)
-        const isMedia = file.type.startsWith('image/') ||
-            file.type.startsWith('video/') ||
-            file.type.startsWith('audio/') ||
-            file.type === 'application/pdf' ||
-            file.type === 'application/zip';
-
-        if (isMedia) {
-            showToast('Only text format files are allowed.');
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
+        const r = new FileReader();
+        r.onload = e => {
             callback(e.target.result);
             processText();
         };
-        reader.readAsText(file);
+        r.readAsText(file);
     }
 
-    function handleFileUpload(inputElement, textAreaElement, nameDisplayElement) {
-        const file = inputElement.files[0];
-        if (!file) return;
-        readFileContent(file, (text) => {
-            if (nameDisplayElement) nameDisplayElement.textContent = file.name;
-            textAreaElement.value = text;
-            inputElement.value = '';
-            if (textAreaElement === EL.keywordsInput) {
-                STATE.isKeywordsDirty = true;
-                setTimeout(syncBackdrop, 0);
-            }
-        });
+    function handleFileUpload(input, area, display) {
+        if (input.files[0]) {
+            readFileContent(input.files[0], txt => {
+                if (display) display.textContent = input.files[0].name;
+                area.value = txt;
+                input.value = '';
+                if (area === EL.keywordsInput) {
+                    STATE.isKeywordsDirty = true;
+                    setTimeout(syncBackdrop, 0);
+                }
+            });
+        }
     }
 
-    /** Syncs keyword input with backdrop for syntax highlighting (comments, reserved words) */
     function syncBackdrop() {
         if (!EL.keywordsBackdrop || !EL.keywordsInput) return;
 
-        const text = EL.keywordsInput.value;
-        const lines = text.split('\n');
+        const highlight = (s) => escapeHtml(s)
+            .replace(/^(?:\s*)(?:\[line\])/, m => `<span class="reserved">${m}</span>`)
+            .replace(/\[num\]|\[cjk\]|\[or\]/g, m => `<span class="reserved">${m}</span>`);
 
-        const stylizedLines = lines.map(line => {
+        const html = EL.keywordsInput.value.split('\n').map(line => {
             if (line.trim().startsWith('///')) {
                 return `<span class="comment">${escapeHtml(line)}</span>`;
             }
 
-            // Split by /// to handle search and replace parts differently
-            const sepIndex = line.indexOf('///');
-            if (sepIndex !== -1) {
-                const searchPart = line.substring(0, sepIndex + 3); // includes ///
-                const replacePart = line.substring(sepIndex + 3);
+            const sep = line.indexOf('///');
+            if (sep !== -1) {
+                const head = line.substring(0, sep + 3);
+                const tail = line.substring(sep + 3);
 
-                // Highlight [num], [cjk] in search part only
-                let highlightedSearch = escapeHtml(searchPart);
-                highlightedSearch = highlightedSearch.replace(/\[num\]|\[cjk\]/g,
-                    match => `<span class="reserved">${match}</span>`);
+                const hasLine = head.trim().startsWith('[line]');
+                const tailRegex = hasLine ? /\[num\]|\[cjk\]|\[del\]|\[line\]/g : /\[num\]|\[cjk\]|\[del\]/g;
 
-                // Highlight [num], [cjk], [del] in replace part
-                let highlightedReplace = escapeHtml(replacePart);
-                highlightedReplace = highlightedReplace.replace(/\[num\]|\[cjk\]|\[del\]/g,
-                    match => `<span class="reserved">${match}</span>`);
+                const hHead = highlight(head);
+                const hTail = escapeHtml(tail).replace(tailRegex, m => `<span class="reserved">${m}</span>`);
 
-                return highlightedSearch + highlightedReplace;
+                return hHead + hTail;
             }
-
-            // No ///, highlight [num] and [cjk] only (no [del])
-            let highlighted = escapeHtml(line);
-            highlighted = highlighted.replace(/\[num\]|\[cjk\]/g,
-                match => `<span class="reserved">${match}</span>`);
-            return highlighted;
-        });
-
-        let html = stylizedLines.join('\n');
-        if (text.endsWith('\n')) html += '<br>';
+            return highlight(line);
+        }).join('\n') + (EL.keywordsInput.value.endsWith('\n') ? '<br>' : '');
 
         EL.keywordsBackdrop.innerHTML = html;
         EL.keywordsBackdrop.scrollTop = EL.keywordsInput.scrollTop;
         EL.keywordsBackdrop.scrollLeft = EL.keywordsInput.scrollLeft;
     }
 
-    function initSyntaxHighlighting() {
-        if (!EL.keywordsBackdrop || !EL.keywordsInput) return;
-
-        // Initial Sync
-        syncBackdrop();
-
-        // Use ResizeObserver to keep backdrop width in sync with textarea
-        // This fixes misalignment when the vertical scrollbar appears/disappears
-        const resizeObserver = new ResizeObserver(() => {
-            EL.keywordsBackdrop.style.width = `${EL.keywordsInput.clientWidth}px`;
-        });
-        resizeObserver.observe(EL.keywordsInput);
-    }
-
-    function initDragAndDrop() {
-        const targets = [
-            { wrapper: EL.sourceInput.closest('.input-wrapper'), textarea: EL.sourceInput, nameDisplay: EL.fileNameSource },
-            { wrapper: EL.keywordsInput.closest('.input-wrapper'), textarea: EL.keywordsInput, nameDisplay: EL.fileNameKeywords }
-        ];
-
-        targets.forEach(({ wrapper, textarea, nameDisplay }) => {
-            if (!wrapper) return;
-            let dragCounter = 0;
-            const events = ['dragenter', 'dragover', 'dragleave', 'drop'];
-            events.forEach(evt => wrapper.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); }));
-
-            wrapper.addEventListener('dragenter', () => {
-                dragCounter++;
-                wrapper.classList.add('drag-active');
-            });
-            wrapper.addEventListener('dragleave', () => {
-                dragCounter--;
-                if (dragCounter === 0) wrapper.classList.remove('drag-active');
-            });
-            wrapper.addEventListener('drop', (e) => {
-                dragCounter = 0;
-                wrapper.classList.remove('drag-active');
-                if (e.dataTransfer.files.length > 0) {
-                    const file = e.dataTransfer.files[0];
-                    readFileContent(file, (text) => {
-                        if (nameDisplay) nameDisplay.textContent = file.name;
-                        textarea.value = text;
-                        if (textarea === EL.keywordsInput) {
-                            STATE.isKeywordsDirty = true;
-                            setTimeout(syncBackdrop, 0);
-                        }
-                    });
-                }
-            });
-        });
-    }
-
-
     /* ==========================================================================
-       6. Event Listeners & Initialization
+       6. Event Listeners
        ========================================================================== */
 
-    // --- Input & Upload Events ---
+    const initSyntaxHighlighting = () => {
+        syncBackdrop();
+        new ResizeObserver(() => {
+            EL.keywordsBackdrop.style.width = `${EL.keywordsInput.clientWidth}px`;
+        }).observe(EL.keywordsInput);
+    };
+
+    const initDragAndDrop = () => {
+        const handleDrop = (e, area, nameDisplay) => {
+            e.preventDefault();
+            e.target.closest('.input-wrapper')?.classList.remove('drag-active');
+
+            if (e.dataTransfer.files[0]) {
+                readFileContent(e.dataTransfer.files[0], txt => {
+                    if (nameDisplay) nameDisplay.textContent = e.dataTransfer.files[0].name;
+                    area.value = txt;
+                    if (area === EL.keywordsInput) {
+                        STATE.isKeywordsDirty = true;
+                        setTimeout(syncBackdrop, 0);
+                    }
+                });
+            }
+        };
+
+        [
+            { el: EL.sourceInput, name: EL.fileNameSource },
+            { el: EL.keywordsInput, name: EL.fileNameKeywords }
+        ].forEach(({ el, name }) => {
+            const wrap = el.closest('.input-wrapper');
+            if (!wrap) return;
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => {
+                wrap.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); });
+            });
+
+            wrap.addEventListener('dragenter', () => wrap.classList.add('drag-active'));
+            wrap.addEventListener('dragleave', (e) => {
+                if (!wrap.contains(e.relatedTarget)) wrap.classList.remove('drag-active');
+            });
+            wrap.addEventListener('drop', e => handleDrop(e, el, name));
+        });
+    };
+
+    // --- Listeners Registration ---
+
+    // Inputs
     EL.sourceInput.addEventListener('input', requestUpdate);
     EL.keywordsInput.addEventListener('input', () => {
         STATE.isKeywordsDirty = true;
@@ -683,214 +699,140 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Initialize backdrop and sync width
-    initSyntaxHighlighting();
+    // File Uploads
+    if (EL.uploadSource) {
+        EL.uploadSource.addEventListener('change', () => handleFileUpload(EL.uploadSource, EL.sourceInput, EL.fileNameSource));
+    }
+    if (EL.uploadKeywords) {
+        EL.uploadKeywords.addEventListener('change', () => handleFileUpload(EL.uploadKeywords, EL.keywordsInput, EL.fileNameKeywords));
+    }
 
-    if (EL.uploadSource) EL.uploadSource.addEventListener('change', () => handleFileUpload(EL.uploadSource, EL.sourceInput, EL.fileNameSource));
-    if (EL.uploadKeywords) EL.uploadKeywords.addEventListener('change', () => handleFileUpload(EL.uploadKeywords, EL.keywordsInput, EL.fileNameKeywords));
+    // UI Controls
+    EL.btnTheme?.addEventListener('click', toggleTheme);
+    EL.btnFontInc?.addEventListener('click', () => updateFontSize(1));
+    EL.btnFontDec?.addEventListener('click', () => updateFontSize(-1));
 
-    // --- Toolbar Buttons ---
-    EL.btnTheme.addEventListener('click', toggleTheme);
-    EL.btnFontInc.addEventListener('click', () => {
-        if (STATE.fontSize < 24) { STATE.fontSize++; updateFontSize(); }
-    });
-    EL.btnFontDec.addEventListener('click', () => {
-        if (STATE.fontSize > 8) { STATE.fontSize--; updateFontSize(); }
-    });
+    // Sync Toggle
+    EL.btnSyncToggle?.addEventListener('click', () => {
+        STATE.isSynced = !STATE.isSynced;
 
-    if (EL.btnRegexToggle) {
-        EL.btnRegexToggle.addEventListener('click', () => {
-            STATE.isRegexMode = !STATE.isRegexMode;
-            EL.btnRegexToggle.classList.toggle('active', STATE.isRegexMode);
-            STATE.isKeywordsDirty = true;
+        const [icon, title, clsMethod] = STATE.isSynced
+            ? ['link', 'Unlink to Edit Result', 'remove']
+            : ['unlink', 'Relink to Sync', 'add'];
+
+        EL.btnSyncToggle.innerHTML = `<i data-lucide="${icon}"></i>`;
+        EL.btnSyncToggle.title = title;
+        EL.btnSyncToggle.classList[clsMethod]('active');
+
+        EL.outputDiv.setAttribute('contenteditable', !STATE.isSynced);
+
+        if (STATE.isSynced) {
+            EL.outputDiv.style.outline = 'none';
             processText();
-        });
-    }
+        } else {
+            EL.outputDiv.focus();
+            STATE.history.stack = [{ content: EL.outputDiv.innerHTML, cursor: 0 }];
+            STATE.history.pointer = 0;
+        }
+        refreshIcons();
+    });
 
-    if (EL.btnSyncToggle) {
-        EL.btnSyncToggle.addEventListener('click', () => {
-            STATE.isSynced = !STATE.isSynced;
-
-            if (STATE.isSynced) {
-                // Return to Search Mode
-                EL.outputDiv.setAttribute('contenteditable', 'false');
-                EL.outputDiv.style.outline = 'none';
-                EL.btnSyncToggle.innerHTML = '<i data-lucide="link"></i>';
-                EL.btnSyncToggle.title = "Unlink to Edit Result";
-                EL.btnSyncToggle.classList.remove('active');
-                processText();
-            } else {
-                // Enter Manual Edit Mode
-                EL.outputDiv.setAttribute('contenteditable', 'true');
-                EL.outputDiv.focus();
-                EL.btnSyncToggle.classList.add('active');
-                EL.btnSyncToggle.innerHTML = '<i data-lucide="unlink"></i>';
-                EL.btnSyncToggle.title = "Relink to Sync (Resets Changes)";
-
-                // Init History
-                STATE.history.stack = [{ content: EL.outputDiv.innerHTML, cursor: 0 }];
-                STATE.history.pointer = 0;
-            }
+    // Clipboard Actions
+    const copyHandler = (btn, textFn) => {
+        if (!textFn()) return;
+        navigator.clipboard.writeText(textFn()).then(() => {
+            showToast('Copied!', 'success');
+            const oldHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="check"></i>';
             refreshIcons();
-        });
-    }
-
-    // --- Export Actions ---
-    if (EL.btnCopyResult) {
-        EL.btnCopyResult.addEventListener('click', () => {
-            if (!EL.outputDiv.textContent) return;
-            const textToCopy = EL.outputDiv.innerText;
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                showToast('Copied to clipboard!', 'success');
-                const originalIcon = EL.btnCopyResult.innerHTML;
-                EL.btnCopyResult.innerHTML = '<i data-lucide="check"></i>';
+            setTimeout(() => {
+                btn.innerHTML = oldHtml;
                 refreshIcons();
-                setTimeout(() => {
-                    EL.btnCopyResult.innerHTML = originalIcon;
-                    refreshIcons();
-                }, 2000);
-            }).catch(() => showToast('Failed to copy.', 'error'));
-        });
-    }
+            }, 2000);
+        }).catch(() => showToast('Failed.', 'error'));
+    };
 
-    if (EL.btnCopySource) {
-        EL.btnCopySource.addEventListener('click', () => {
-            if (!EL.sourceInput.value) return;
-            navigator.clipboard.writeText(EL.sourceInput.value).then(() => {
-                showToast('Copied to clipboard!', 'success');
-                const originalIcon = EL.btnCopySource.innerHTML;
-                EL.btnCopySource.innerHTML = '<i data-lucide="check"></i>';
-                refreshIcons();
-                setTimeout(() => {
-                    EL.btnCopySource.innerHTML = originalIcon;
-                    refreshIcons();
-                }, 2000);
-            }).catch(() => showToast('Failed to copy.', 'error'));
-        });
-    }
+    EL.btnCopyResult?.addEventListener('click', () => copyHandler(EL.btnCopyResult, () => EL.outputDiv.innerText));
+    EL.btnCopySource?.addEventListener('click', () => copyHandler(EL.btnCopySource, () => EL.sourceInput.value));
 
-    if (EL.btnDownloadResult) {
-        EL.btnDownloadResult.addEventListener('click', () => {
-            if (!EL.outputDiv.textContent) return;
-            const textToSave = EL.outputDiv.innerText;
-            const blob = new Blob([textToSave], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
+    EL.btnDownloadResult?.addEventListener('click', () => {
+        if (!EL.outputDiv.textContent) return;
 
-            const now = new Date();
-            const pad = (n) => String(n).padStart(2, '0');
-            const timestamp = `${String(now.getFullYear()).slice(-2)}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+        const blob = new Blob([EL.outputDiv.innerText], { type: 'text/plain' });
+        const now = new Date();
+        const ts = now.toISOString().slice(2, 16).replace(/[-:]/g, '').replace('T', '-'); // YYMMDD-HHMM
 
-            let baseName = 'result';
-            if (EL.fileNameSource.textContent) {
-                const s = EL.fileNameSource.textContent;
-                baseName = s.includes('.') ? s.substring(0, s.lastIndexOf('.')) : s;
-            }
+        let name = EL.fileNameSource.textContent || 'result';
+        if (name.includes('.')) name = name.substring(0, name.lastIndexOf('.'));
 
-            a.download = `TMS-${baseName}_${timestamp}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            showToast('Download started', 'success');
-        });
-    }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `TMS-${name}_${ts}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        showToast('Download started', 'success');
+    });
 
-    // --- Manual Editing Events ---
-    EL.outputDiv.addEventListener('compositionend', (e) => {
+    // Manual Edit Events
+    EL.outputDiv.addEventListener('compositionend', e => {
         if (!STATE.isSynced && e.data) wrapLastChars(e.data.length);
     });
 
-    EL.outputDiv.addEventListener('input', (e) => {
+    EL.outputDiv.addEventListener('input', e => {
         if (STATE.isSynced) return;
         debouncedSaveHistory();
-        if (e.isComposing) return;
-        if (e.inputType === 'insertText' && e.data) wrapLastChars(e.data.length);
+        if (!e.isComposing && e.inputType === 'insertText' && e.data) wrapLastChars(e.data.length);
         updateActionButtonsState();
     });
 
-
-    EL.outputDiv.addEventListener('keydown', (e) => {
+    EL.outputDiv.addEventListener('keydown', e => {
         if (STATE.isSynced) return;
 
-        // Undo: Ctrl+Z
+        // Undo/Redo
         if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
             e.preventDefault();
-            performUndo();
+            performHistoryAction(true);
             return;
         }
-
-        // Redo: Ctrl+Y or Ctrl+Shift+Z
         if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
             e.preventDefault();
-            performRedo();
+            performHistoryAction(false);
             return;
         }
 
-        // Enter: Insert newline, split styled span if needed
+        // Enter Key
         if (e.key === 'Enter') {
             e.preventDefault();
             saveHistorySnapshot();
-
-            const sel = window.getSelection();
-            if (!sel.rangeCount) return;
-            const range = sel.getRangeAt(0);
-            range.deleteContents();
-
-            const newlineSpan = document.createElement('span');
-            newlineSpan.className = 'diff-user';
-            newlineSpan.textContent = '\n';
-
-            if (!splitAndInsert(range, newlineSpan)) {
-                range.insertNode(newlineSpan);
-            }
-
-            const newRange = document.createRange();
-            newRange.setStartAfter(newlineSpan);
-            newRange.collapse(true);
-            sel.removeAllRanges();
-            sel.addRange(newRange);
-
+            const s = document.createElement('span');
+            s.className = 'diff-user';
+            s.textContent = '\n';
+            insertNodeAtCursor(s);
             debouncedSaveHistory();
             updateActionButtonsState();
         }
     });
 
-    EL.outputDiv.addEventListener('paste', (e) => {
+    EL.outputDiv.addEventListener('paste', e => {
         if (STATE.isSynced) return;
         e.preventDefault();
 
-        const text = (e.clipboardData || window.clipboardData).getData('text');
-        if (!text) return;
+        const t = (e.clipboardData || window.clipboardData).getData('text');
+        if (!t) return;
 
         saveHistorySnapshot();
-
-        const sel = window.getSelection();
-        if (!sel.rangeCount) return;
-        const range = sel.getRangeAt(0);
-        range.deleteContents();
-
-        const pasteSpan = document.createElement('span');
-        pasteSpan.className = 'diff-user';
-        pasteSpan.textContent = text;
-
-        if (!splitAndInsert(range, pasteSpan)) {
-            range.insertNode(pasteSpan);
-        }
-
-        const newRange = document.createRange();
-        newRange.setStartAfter(pasteSpan);
-        newRange.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(newRange);
-
+        const s = document.createElement('span');
+        s.className = 'diff-user';
+        s.textContent = t;
+        insertNodeAtCursor(s);
         saveHistorySnapshot();
         updateActionButtonsState();
     });
 
-    // --- Final Init ---
+    // Initialization
+    initSyntaxHighlighting();
     initDragAndDrop();
     processText();
-
 });
