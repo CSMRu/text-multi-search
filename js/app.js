@@ -847,9 +847,10 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             e.target.closest('.input-wrapper')?.classList.remove('drag-active');
 
-            if (e.dataTransfer.files[0]) {
-                readFileContent(e.dataTransfer.files[0], txt => {
-                    if (nameDisplay) nameDisplay.textContent = e.dataTransfer.files[0].name;
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                readFileContent(file, txt => {
+                    if (nameDisplay) nameDisplay.textContent = file.name;
                     area.value = txt;
                     if (area === EL.keywordsInput) {
                         STATE.isKeywordsDirty = true;
