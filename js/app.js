@@ -81,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
        2. Utility Functions
        ========================================================================== */
 
+    // HTML entity mapping for escaping special characters in output
     const htmlMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
 
     function escapeHtml(text) {
@@ -90,6 +91,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function escapeRegExp(string) {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // Refresh Lucide icons after dynamic DOM updates
+    function refreshIcons() {
+        if (window.lucide) window.lucide.createIcons();
     }
 
     // Debounces input events to prevent excessive processing during typing
@@ -174,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span>${message}</span>
         `;
         container.appendChild(toast);
-        if (window.lucide) window.lucide.createIcons();
+        refreshIcons();
 
         setTimeout(() => {
             toast.classList.add('fade-out');
@@ -214,7 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (EL.btnTheme) {
             EL.btnTheme.innerHTML = `<i data-lucide="${newTheme === 'dark' ? 'moon' : 'sun'}"></i>`;
-            if (window.lucide) window.lucide.createIcons();
+            refreshIcons();
         }
     }
 
@@ -223,26 +229,30 @@ document.addEventListener('DOMContentLoaded', () => {
        4. Core Logic (Search Platform)
        ========================================================================== */
 
+    /**
+     * Parses keyword input and builds regex matchers for search/replace.
+     * Supports: basic keywords, ///replacement, [num]/[cjk] wildcards, [del] deletion
+     */
     function buildMatchers(keywordsValue) {
         const lines = keywordsValue.split('\n');
         const matchers = [];
 
         lines.forEach(line => {
             const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith('//')) return;
+            if (!trimmed || trimmed.startsWith('///')) return;
 
             let search = trimmed;
             let replace = trimmed;
             let isReplacement = false;
 
-            // Handle "search // replace" syntax
-            // Example: "apple // orange" -> Search "apple", Replace with "orange"
-            const separator = ' // ';
+            const separator = '///';
             const sepIndex = trimmed.indexOf(separator);
 
             if (sepIndex !== -1) {
                 search = trimmed.substring(0, sepIndex).trim();
                 replace = trimmed.substring(sepIndex + separator.length).trim();
+                // [del] reserved word: delete matched text (exact match only)
+                if (replace === '[del]') replace = '';
                 isReplacement = true;
             }
 
@@ -289,6 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return matchers;
     }
 
+    /** Main search/replace engine - scans source text and applies all matchers */
     function processText() {
         if (!STATE.isSynced) return;
 
@@ -302,7 +313,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const matchers = STATE.cachedMatchers;
 
-        // Handle empty cases
         if (!sourceText || matchers.length === 0) {
             EL.outputDiv.innerHTML = sourceText ? `<span class="diff-original">${escapeHtml(sourceText)}</span>` : '';
             EL.countMatch.textContent = '0';
@@ -316,7 +326,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let countR = 0;
         const resultParts = [];
 
-        // Reset state
         matchers.forEach(m => m.regex.lastIndex = 0);
         const nextMatches = new Array(matchers.length).fill(undefined);
 
@@ -516,7 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return false;
     }
 
-    /* --- File & Drag/Drop Module --- */
+    /** Validates and reads uploaded file, enforces size/type restrictions */
     function readFileContent(file, callback) {
         if (file.size > CONFIG.MAX_FILE_SIZE) {
             showToast(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max: 1MB`);
@@ -557,7 +566,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    /* --- Syntax Highlighting Module --- */
+    /** Syncs keyword input with backdrop for syntax highlighting (comments, reserved words) */
     function syncBackdrop() {
         if (!EL.keywordsBackdrop || !EL.keywordsInput) return;
 
@@ -565,10 +574,34 @@ document.addEventListener('DOMContentLoaded', () => {
         const lines = text.split('\n');
 
         const stylizedLines = lines.map(line => {
-            if (line.trim().startsWith('//')) {
+            if (line.trim().startsWith('///')) {
                 return `<span class="comment">${escapeHtml(line)}</span>`;
             }
-            return escapeHtml(line);
+
+            // Split by /// to handle search and replace parts differently
+            const sepIndex = line.indexOf('///');
+            if (sepIndex !== -1) {
+                const searchPart = line.substring(0, sepIndex + 3); // includes ///
+                const replacePart = line.substring(sepIndex + 3);
+
+                // Highlight [num], [cjk] in search part only
+                let highlightedSearch = escapeHtml(searchPart);
+                highlightedSearch = highlightedSearch.replace(/\[num\]|\[cjk\]/g,
+                    match => `<span class="reserved">${match}</span>`);
+
+                // Highlight [num], [cjk], [del] in replace part
+                let highlightedReplace = escapeHtml(replacePart);
+                highlightedReplace = highlightedReplace.replace(/\[num\]|\[cjk\]|\[del\]/g,
+                    match => `<span class="reserved">${match}</span>`);
+
+                return highlightedSearch + highlightedReplace;
+            }
+
+            // No ///, highlight [num] and [cjk] only (no [del])
+            let highlighted = escapeHtml(line);
+            highlighted = highlighted.replace(/\[num\]|\[cjk\]/g,
+                match => `<span class="reserved">${match}</span>`);
+            return highlighted;
         });
 
         let html = stylizedLines.join('\n');
@@ -698,7 +731,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 STATE.history.stack = [{ content: EL.outputDiv.innerHTML, cursor: 0 }];
                 STATE.history.pointer = 0;
             }
-            if (window.lucide) window.lucide.createIcons();
+            refreshIcons();
         });
     }
 
@@ -711,10 +744,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('Copied to clipboard!', 'success');
                 const originalIcon = EL.btnCopyResult.innerHTML;
                 EL.btnCopyResult.innerHTML = '<i data-lucide="check"></i>';
-                if (window.lucide) window.lucide.createIcons();
+                refreshIcons();
                 setTimeout(() => {
                     EL.btnCopyResult.innerHTML = originalIcon;
-                    if (window.lucide) window.lucide.createIcons();
+                    refreshIcons();
                 }, 2000);
             }).catch(() => showToast('Failed to copy.', 'error'));
         });
@@ -727,10 +760,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('Copied to clipboard!', 'success');
                 const originalIcon = EL.btnCopySource.innerHTML;
                 EL.btnCopySource.innerHTML = '<i data-lucide="check"></i>';
-                if (window.lucide) window.lucide.createIcons();
+                refreshIcons();
                 setTimeout(() => {
                     EL.btnCopySource.innerHTML = originalIcon;
-                    if (window.lucide) window.lucide.createIcons();
+                    refreshIcons();
                 }, 2000);
             }).catch(() => showToast('Failed to copy.', 'error'));
         });

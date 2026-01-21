@@ -25,7 +25,7 @@
     <header class="toolbar">
         <div class="brand">
             <h1>text <span class="text-highlight">m</span>ulti <span class="text-highlight">s</span>earch <span
-                    class="version-tag">v26.0121b</span></h1>
+                    class="version-tag">v26.0121c</span></h1>
         </div>
 
         <div class="controls">
@@ -118,11 +118,12 @@
                             <div class="tooltip-content right">
                                 Format:<br>
                                 1. <b>Keyword</b> : Basic match<br>
-                                2. <b>Key // Replace</b> : Text substitution<br>
-                                3. <b>[num]</b> : Matches any number<br>
-                                4. <b>[cjk]</b> : Matches one CJK character<br>
-                                5. <b>/regex/</b> : Regular Expression<br>
-                                6. <b style="color: var(--syntax-comment);">// Comment</b> : Ignored line
+                                2. <b>Key///Replace</b> : Text substitution<br>
+                                3. <b>Key///[del]</b> : Delete matched text<br>
+                                4. <b>[num]</b> : Matches any number<br>
+                                5. <b>[cjk]</b> : Matches one CJK character<br>
+                                6. <b>/regex/</b> : Regular Expression<br>
+                                7. <b style="color: var(--syntax-comment);">/// Comment</b> : Ignored line
                             </div>
                         </div>
                     </div>
@@ -131,7 +132,7 @@
                     <!-- Backdrop for syntax highlighting (mirrors textarea content) -->
                     <div id="keywords-backdrop" class="textarea-backdrop"></div>
                     <textarea id="text-keywords"
-                        placeholder="Enter keywords (one per line)...&#10;Example:&#10;apple&#10;orange // fruit&#10;// comment"></textarea>
+                        placeholder="Enter keywords (one per line)...&#10;Example:&#10;apple&#10;orange///fruit&#10;/// comment"></textarea>
                     <!-- Drag & Drop Overlay -->
                     <div class="drop-overlay">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"

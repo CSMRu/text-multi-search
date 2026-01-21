@@ -1,5 +1,5 @@
 # Text Multi Search
-| <div align="center"> <a href="https://csmru.github.io/text-multi-search/"><img src="favicon.svg" width="128"></a> <br> [![Version](https://img.shields.io/badge/Version-26.0121b-B5E853?style=for-the-badge)](https://github.com/csmru/text-multi-search/commits) [![Hosted on GitHub Pages](https://img.shields.io/badge/GitHub-Pages-2b7346?style=for-the-badge&logo=github)](https://csmru.github.io/text-multi-search/) </div> |
+| <div align="center"> <a href="https://csmru.github.io/text-multi-search/"><img src="favicon.svg" width="128"></a> <br> [![Version](https://img.shields.io/badge/Version-26.0121c-B5E853?style=for-the-badge)](https://github.com/csmru/text-multi-search/commits) [![Hosted on GitHub Pages](https://img.shields.io/badge/GitHub-Pages-2b7346?style=for-the-badge&logo=github)](https://csmru.github.io/text-multi-search/) </div> |
 | :--- |
 
 > A powerful, client-side text analysis tool for searching, highlighting, and replacing multiple keywords simultaneously. Designed for developers and data analysts who need quick, visual text manipulation without leaving the browser.
@@ -7,7 +7,8 @@
 ## Features
 
 -   **⚡ Simultaneous Multi-Search**: Highlight hundreds of different keywords instantly with distinct colors.
--   **🔄 Batch Replacement**: Define `Search // Replace` rules to perform multiple substitutions in one pass.
+-   **🔄 Batch Replacement**: Define `Search///Replace` rules to perform multiple substitutions in one pass.
+-   **🗑️ Text Deletion**: Use `Search///[del]` syntax to remove matched text entirely.
 -   **🧩 Advanced Pattern Matching**:
     -   **Regex**: Full Regular Expression support (`/pattern/`).
     -   **Wildcards**: Built-in number wildcard `[num]` support.
@@ -23,26 +24,27 @@ Enter each rule on a new line in the **Search Keywords** panel:
 | Syntax | Description | Example |
 |---|---|---|
 | `Keyword` | Highlights all occurrences of "Keyword" | `Error` |
-| `Search // Replace` | Replaces "Search" with "Replace" | `fix // fixed` |
+| `Search///Replace` | Replaces "Search" with "Replace" | `fix///fixed` |
+| `Search///[del]` | Deletes "Search" entirely | `debug///[del]` |
 | `[num]` | Matches any sequence of digits (e.g. `User[num]` matches `User123`) | `[num]` |
 | `[cjk]` | Matches one CJK character (e.g. `[cjk]田` matches `山田`) | `[cjk]` |
 | `/regex/` | Matches the Regular Expression | `/^Error.*$/` |
 
-> **Note**: Lines starting with `//` are treated as comments and ignored.
+> **Note**: Lines starting with `///` are treated as comments and ignored.
 
 ### Wildcard Capture in Replacement
 You can reuse matched wildcard values in the replacement string:
 
 | Example | Input | Output |
 |---|---|---|
-| `[cjk]田 // [cjk]・田` | `山田` | `山・田` |
-| `User[num] // ID:[num]` | `User123` | `ID:123` |
-| `[cjk][cjk] // [cjk]-[cjk]` | `山田` | `山-田` |
+| `[cjk]田///[cjk]・田` | `山田` | `山・田` |
+| `User[num]///ID:[num]` | `User123` | `ID:123` |
+| `[cjk][cjk]///[cjk]-[cjk]` | `山田` | `山-田` |
 
 > **Limitations**: 
 > - Wildcards must be the **same type** and in the **same order** between search and replace.
-> - ✅ `[num] // [num]`, ✅ `[cjk][cjk] // [cjk]-[cjk]`
-> - ❌ `[num] // [cjk]` (type mismatch), ❌ `[cjk][num] // [num][cjk]` (order swap)
+> - ✅ `[num]///[num]`, ✅ `[cjk][cjk]///[cjk]-[cjk]`
+> - ❌ `[num]///[cjk]` (type mismatch), ❌ `[cjk][num]///[num][cjk]` (order swap)
 
 ### 2. Manual Editing
 Click the **Unlink** button (<i data-lucide="link"></i>) to switch to Edit Mode. You can now type directly in the result panel. Your manual changes will be highlighted in **Blue**.

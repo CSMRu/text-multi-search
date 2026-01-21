@@ -180,8 +180,14 @@ textarea {
     color: var(--text-muted);
 }
 
+/* Syntax highlighting classes for keyword textarea */
 .textarea-backdrop .comment {
     color: var(--syntax-comment);
+}
+
+.textarea-backdrop .reserved {
+    color: var(--primary);
+    font-weight: 600;
 }
 
 /* Drag Overlay */
