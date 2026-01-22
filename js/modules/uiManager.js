@@ -5,6 +5,10 @@
 window.TMS = window.TMS || {};
 
 TMS.UIManager = {
+    // =========================================================================
+    // [1] Generic UI Controls (Theme, Toast, Font)
+    // =========================================================================
+
     showToast(message, type = 'error') {
         const container = document.getElementById('toast-container');
         if (!container) return;
@@ -23,21 +27,14 @@ TMS.UIManager = {
         }, 4000);
     },
 
-    updateActionButtonsState() {
-        const hasResult = TMS.EL.outputDiv.textContent.trim().length > 0;
-        const hasSource = TMS.EL.sourceInput.value.trim().length > 0;
-
-        const setBtnState = (btn, isActive) => {
-            if (btn) {
-                btn.disabled = !isActive;
-                btn.style.opacity = isActive ? '1' : '0.5';
-                btn.style.pointerEvents = isActive ? 'auto' : 'none';
-            }
-        };
-
-        setBtnState(TMS.EL.btnDownloadResult, hasResult);
-        setBtnState(TMS.EL.btnCopyResult, hasResult);
-        setBtnState(TMS.EL.btnCopySource, hasSource);
+    toggleTheme() {
+        const html = document.documentElement;
+        const newTheme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-theme', newTheme);
+        if (TMS.EL.btnTheme) {
+            TMS.EL.btnTheme.innerHTML = `<i data-lucide="${newTheme === 'dark' ? 'moon' : 'sun'}"></i>`;
+            TMS.Utils.refreshIcons();
+        }
     },
 
     updateFontSize(delta) {
@@ -48,13 +45,14 @@ TMS.UIManager = {
         document.documentElement.style.setProperty('--font-size-base', `${TMS.STATE.fontSize * 1.333}px`);
     },
 
-    toggleTheme() {
-        const html = document.documentElement;
-        const newTheme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-        html.setAttribute('data-theme', newTheme);
-        if (TMS.EL.btnTheme) {
-            TMS.EL.btnTheme.innerHTML = `<i data-lucide="${newTheme === 'dark' ? 'moon' : 'sun'}"></i>`;
-            TMS.Utils.refreshIcons();
+    // =========================================================================
+    // [2] App-Specific UI Logic
+    // =========================================================================
+
+    setVersion(version) {
+        const versionTag = document.querySelector('.version-tag');
+        if (versionTag && version) {
+            versionTag.textContent = version;
         }
     },
 
@@ -76,6 +74,27 @@ TMS.UIManager = {
             TMS.EL.keywordsInput.focus();
         }
     },
+
+    updateActionButtonsState() {
+        const hasResult = TMS.EL.outputDiv.textContent.trim().length > 0;
+        const hasSource = TMS.EL.sourceInput.value.trim().length > 0;
+
+        const setBtnState = (btn, isActive) => {
+            if (btn) {
+                btn.disabled = !isActive;
+                btn.style.opacity = isActive ? '1' : '0.5';
+                btn.style.pointerEvents = isActive ? 'auto' : 'none';
+            }
+        };
+
+        setBtnState(TMS.EL.btnDownloadResult, hasResult);
+        setBtnState(TMS.EL.btnCopyResult, hasResult);
+        setBtnState(TMS.EL.btnCopySource, hasSource);
+    },
+
+    // =========================================================================
+    // [3] Complex Rendering Logic
+    // =========================================================================
 
     syncBackdrop() {
         if (!TMS.EL.keywordsInput || !TMS.EL.keywordsBackdrop) return;

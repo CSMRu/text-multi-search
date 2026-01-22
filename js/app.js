@@ -49,7 +49,34 @@ document.addEventListener('DOMContentLoaded', () => {
        Bootstraps Worker threads and File Drag & Drop handlers.
        ========================================================================== */
     TMS.WorkerManager.init();
-    TMS.FileManager.initDragAndDrop();
+
+    // Define File Handler Callbacks
+    const handleSourceLoad = (name, content) => {
+        TMS.EL.fileNameSource.textContent = name;
+        TMS.EL.sourceInput.value = content;
+        TMS.WorkerManager.scheduleProcessing();
+    };
+
+    const handleKeywordsLoad = (name, content) => {
+        TMS.EL.fileNameKeywords.textContent = name;
+        TMS.EL.keywordsInput.value = content;
+        TMS.STATE.isKeywordsDirty = true;
+        TMS.WorkerManager.scheduleProcessing();
+        TMS.UIManager.syncBackdrop();
+    };
+
+    TMS.FileManager.initDragAndDrop([
+        {
+            element: TMS.EL.sourceInput,
+            limit: TMS.CONFIG.MAX_SOURCE_FILE_SIZE,
+            onDrop: handleSourceLoad
+        },
+        {
+            element: TMS.EL.keywordsInput,
+            limit: TMS.CONFIG.MAX_KEYWORDS_FILE_SIZE,
+            onDrop: handleKeywordsLoad
+        }
+    ]);
 
     /* ==========================================================================
        [3] Event Listeners
@@ -57,11 +84,11 @@ document.addEventListener('DOMContentLoaded', () => {
        ========================================================================== */
 
     // --- Input Handling ---
-    TMS.EL.sourceInput.addEventListener('input', () => TMS.Utils.requestUpdate());
+    TMS.EL.sourceInput.addEventListener('input', () => TMS.WorkerManager.scheduleProcessing());
 
     TMS.EL.keywordsInput.addEventListener('input', () => {
         TMS.STATE.isKeywordsDirty = true;
-        TMS.Utils.requestUpdate();
+        TMS.WorkerManager.scheduleProcessing();
         TMS.UIManager.syncBackdrop();
     });
 
@@ -78,10 +105,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     TMS.EL.uploadSource.addEventListener('change', () =>
-        TMS.FileManager.handleFileUpload(TMS.EL.uploadSource, TMS.EL.sourceInput, TMS.EL.fileNameSource, TMS.CONFIG.MAX_SOURCE_FILE_SIZE));
+        TMS.FileManager.handleFileUpload(TMS.EL.uploadSource, TMS.CONFIG.MAX_SOURCE_FILE_SIZE, handleSourceLoad));
 
     TMS.EL.uploadKeywords.addEventListener('change', () =>
-        TMS.FileManager.handleFileUpload(TMS.EL.uploadKeywords, TMS.EL.keywordsInput, TMS.EL.fileNameKeywords, TMS.CONFIG.MAX_KEYWORDS_FILE_SIZE));
+        TMS.FileManager.handleFileUpload(TMS.EL.uploadKeywords, TMS.CONFIG.MAX_KEYWORDS_FILE_SIZE, handleKeywordsLoad));
 
     // --- Toolbar & Actions ---
     if (TMS.EL.btnTheme) TMS.EL.btnTheme.addEventListener('click', TMS.UIManager.toggleTheme);
@@ -188,4 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
     TMS.Utils.refreshIcons();
     TMS.UIManager.updateFontSize(0);
     TMS.UIManager.updateActionButtonsState();
+
+    // Set Version
+    TMS.UIManager.setVersion(TMS.CONFIG.VERSION);
 });

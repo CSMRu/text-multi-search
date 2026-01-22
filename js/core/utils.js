@@ -37,26 +37,10 @@ TMS.Utils.isStyledSpan = function (el) {
 };
 
 /** Calculates dynamic debounce delay based on text length */
-TMS.Utils.getSmartDebounceDelay = function () {
-    // Requires TMS.EL.sourceInput to be initialized
-    if (!TMS.EL.sourceInput) return TMS.CONFIG.DEBOUNCE_DELAY;
-
-    const len = TMS.EL.sourceInput.value.length;
-    if (len < 5000) return 100;      // < 5KB: Very fast
-    if (len < 50000) return 300;     // < 50KB: Moderate
-    if (len < 200000) return 450;    // < 200KB: Slower
+TMS.Utils.getSmartDebounceDelay = function (length) {
+    if (!length) return TMS.CONFIG.DEBOUNCE_DELAY;
+    if (length < 5000) return 100;      // < 5KB: Very fast
+    if (length < 50000) return 300;     // < 50KB: Moderate
+    if (length < 200000) return 450;    // < 200KB: Slower
     return 600;                      // Large: Slowest
-};
-
-/** Schedules a search update */
-TMS.Utils.requestUpdate = function () {
-    const delay = TMS.Utils.getSmartDebounceDelay();
-    if (TMS.STATE.debounceTimer) clearTimeout(TMS.STATE.debounceTimer);
-    // Note: processText will be defined in Main or WorkerManager, 
-    // but here we assume a global or TMS method reference.
-    // For better decoupling, we might want to just expose this logic or bind it later.
-    // Ideally, TMS.WorkerManager.processText should be called.
-    if (TMS.WorkerManager && TMS.WorkerManager.processText) {
-        TMS.STATE.debounceTimer = setTimeout(() => TMS.WorkerManager.processText(), delay);
-    }
 };

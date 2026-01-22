@@ -5,6 +5,58 @@
 window.TMS = window.TMS || {};
 
 TMS.HistoryManager = {
+    // =========================================================================
+    // [1] Public API (Undo/Redo/Paste/Save)
+    // =========================================================================
+
+    /**
+     * Executes Undo or Redo based on flag.
+     * @param {boolean} isUndo - If true, performs Undo; otherwise Redo.
+     */
+    performAction(isUndo) {
+        const canAction = isUndo
+            ? TMS.STATE.history.pointer > 0
+            : TMS.STATE.history.pointer < TMS.STATE.history.stack.length - 1;
+
+        if (canAction) {
+            TMS.STATE.history.pointer += isUndo ? -1 : 1;
+            const s = TMS.STATE.history.stack[TMS.STATE.history.pointer];
+            TMS.EL.outputDiv.innerHTML = s.content;
+            this.setCursorOffset(TMS.EL.outputDiv, s.cursor);
+            TMS.UIManager.updateActionButtonsState();
+        }
+    },
+
+    /**
+     * Inserts a node at the current cursor position, splitting spans if necessary.
+     * @param {Node} node 
+     */
+    insertNodeAtCursor(node) {
+        const sel = window.getSelection();
+        if (!sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+
+        const anchor = range.startContainer;
+        const parent = anchor.parentElement;
+
+        if (anchor.nodeType === Node.TEXT_NODE && TMS.Utils.isStyledSpan(parent)) {
+            const latter = anchor.splitText(range.startOffset);
+            const part2 = parent.cloneNode(false);
+            part2.appendChild(latter);
+            while (latter.nextSibling) part2.appendChild(latter.nextSibling);
+            parent.after(part2);
+            range.setStartAfter(parent);
+            range.collapse(true);
+        }
+
+        range.insertNode(node);
+        range.setStartAfter(node);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+    },
+
     saveSnapshot() {
         if (TMS.STATE.isSynced) return;
 
@@ -33,19 +85,9 @@ TMS.HistoryManager = {
         TMS.STATE.history.timer = setTimeout(() => this.saveSnapshot(), TMS.CONFIG.HISTORY_DEBOUNCE);
     },
 
-    performAction(isUndo) {
-        const canAction = isUndo
-            ? TMS.STATE.history.pointer > 0
-            : TMS.STATE.history.pointer < TMS.STATE.history.stack.length - 1;
-
-        if (canAction) {
-            TMS.STATE.history.pointer += isUndo ? -1 : 1;
-            const s = TMS.STATE.history.stack[TMS.STATE.history.pointer];
-            TMS.EL.outputDiv.innerHTML = s.content;
-            this.setCursorOffset(TMS.EL.outputDiv, s.cursor);
-            TMS.UIManager.updateActionButtonsState();
-        }
-    },
+    // =========================================================================
+    // [2] DOM Helpers (Cursor Calculation)
+    // =========================================================================
 
     /**
      * Calculates current caret position as text offset.
@@ -95,36 +137,6 @@ TMS.HistoryManager = {
             range.selectNodeContents(container);
             range.collapse(false);
         }
-        sel.removeAllRanges();
-        sel.addRange(range);
-    },
-
-    /**
-     * Inserts a node at the current cursor position, splitting spans if necessary.
-     * @param {Node} node 
-     */
-    insertNodeAtCursor(node) {
-        const sel = window.getSelection();
-        if (!sel.rangeCount) return;
-        const range = sel.getRangeAt(0);
-        range.deleteContents();
-
-        const anchor = range.startContainer;
-        const parent = anchor.parentElement;
-
-        if (anchor.nodeType === Node.TEXT_NODE && TMS.Utils.isStyledSpan(parent)) {
-            const latter = anchor.splitText(range.startOffset);
-            const part2 = parent.cloneNode(false);
-            part2.appendChild(latter);
-            while (latter.nextSibling) part2.appendChild(latter.nextSibling);
-            parent.after(part2);
-            range.setStartAfter(parent);
-            range.collapse(true);
-        }
-
-        range.insertNode(node);
-        range.setStartAfter(node);
-        range.collapse(true);
         sel.removeAllRanges();
         sel.addRange(range);
     }

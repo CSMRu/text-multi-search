@@ -9,9 +9,194 @@ const WORKER_CONFIG = {
     TIMEOUT_MS: 3000
 };
 
+TMS.WorkerManager = {
+    worker: null,
+    timer: null,
+    currentId: 0,
+    isLoading: false,
+    useFallback: false,
+
+    // =========================================================================
+    // [1] Initialization & Scheduling
+    // =========================================================================
+
+    init() {
+        if (window.location.protocol === 'file:') {
+            this.useFallback = true;
+            TMS.UIManager.showToast('Running in local mode (No Worker).', 'info');
+            console.warn('Worker disabled due to file:// protocol. Using FallbackEngine.');
+            return;
+        }
+        try {
+            if (this.worker) this.worker.terminate();
+            this.worker = new Worker('js/worker.js');
+            this.worker.onmessage = this.handleMessage.bind(this);
+            this.worker.onerror = (e) => {
+                console.error('Worker Error:', e);
+                this.useFallback = true;
+                this.finishState();
+                TMS.UIManager.showToast('Worker failed. Switching to Sync mode.', 'error');
+            };
+        } catch (e) {
+            this.useFallback = true;
+            console.error('Worker Init Failed:', e);
+            TMS.UIManager.showToast('Worker initialization failed. Switching to Sync mode.', 'error');
+        }
+    },
+
+    scheduleProcessing() {
+        const len = TMS.EL.sourceInput ? TMS.EL.sourceInput.value.length : 0;
+        const delay = TMS.Utils.getSmartDebounceDelay(len);
+
+        if (TMS.STATE.debounceTimer) clearTimeout(TMS.STATE.debounceTimer);
+        TMS.STATE.debounceTimer = setTimeout(() => this.processText(), delay);
+    },
+
+    // =========================================================================
+    // [2] Core Processing Logic (Public)
+    // =========================================================================
+
+    processText() {
+        if (!TMS.STATE.isSynced) return;
+
+        const sourceText = TMS.EL.sourceInput.value;
+        const keywordsValue = TMS.EL.keywordsInput.value;
+
+        if (!sourceText) {
+            TMS.EL.outputDiv.innerHTML = '';
+            TMS.EL.countMatch.textContent = '0';
+            TMS.EL.countReplace.textContent = '0';
+            TMS.UIManager.updateActionButtonsState();
+            return;
+        }
+
+        this.postMessage(sourceText, keywordsValue);
+    },
+
+    stopRendering() {
+        this.currentId++;
+        this.finishState();
+    },
+
+    // =========================================================================
+    // [3] Worker Communication (Internal)
+    // =========================================================================
+
+    postMessage(sourceText, keywordsValue) {
+        // Aggressive Termination
+        if (this.isLoading && this.worker) {
+            this.worker.terminate();
+            this.worker = null;
+        }
+
+        if (!this.worker && !this.useFallback) this.init();
+
+        this.currentId++;
+        this.setLoading(true);
+
+        if (this.useFallback) {
+            setTimeout(() => {
+                try {
+                    const result = FallbackEngine.processText(sourceText, keywordsValue);
+                    this.handleMessage({ data: { id: this.currentId, status: 'success', ...result } });
+                } catch (e) {
+                    this.handleMessage({ data: { id: this.currentId, status: 'error', message: e.message } });
+                }
+            }, 10);
+            return;
+        }
+
+        if (this.timer) clearTimeout(this.timer);
+        this.timer = setTimeout(() => {
+            this.handleTimeout();
+        }, WORKER_CONFIG.TIMEOUT_MS);
+
+        this.worker.postMessage({
+            id: this.currentId,
+            sourceText,
+            keywordsValue
+        });
+    },
+
+    handleMessage(e) {
+        const { id, status, html, htmlChunks, countM, countR, message } = e.data;
+        if (id !== this.currentId) return;
+
+        clearTimeout(this.timer);
+
+        if (status === 'success') {
+            TMS.EL.countMatch.textContent = countM;
+            TMS.EL.countReplace.textContent = countR;
+            TMS.EL.outputDiv.innerHTML = '';
+            TMS.UIManager.updateActionButtonsState();
+
+            if (htmlChunks && htmlChunks.length > 0) {
+                this.renderChunks(htmlChunks, id);
+            } else if (html) {
+                TMS.EL.outputDiv.innerHTML = html;
+                this.setLoading(false);
+                TMS.UIManager.updateActionButtonsState();
+            } else {
+                this.setLoading(false);
+                TMS.UIManager.updateActionButtonsState();
+            }
+        } else {
+            this.setLoading(false);
+            TMS.UIManager.showToast(message || 'Unknown Error', 'error');
+        }
+    },
+
+    // =========================================================================
+    // [4] Helpers & State Management
+    // =========================================================================
+
+    renderChunks(chunks, originId) {
+        let index = 0;
+        const total = chunks.length;
+
+        const renderNext = () => {
+            if (this.currentId !== originId) return;
+
+            TMS.EL.outputDiv.insertAdjacentHTML('beforeend', chunks[index]);
+            index++;
+
+            if (index < total) {
+                requestAnimationFrame(renderNext);
+            } else {
+                this.setLoading(false);
+                TMS.UIManager.updateActionButtonsState();
+            }
+        };
+        requestAnimationFrame(renderNext);
+    },
+
+    handleTimeout() {
+        this.worker.terminate();
+        this.worker = null;
+        this.setLoading(false);
+        TMS.UIManager.showToast('Search Timed Out (Too complex)', 'error');
+        TMS.EL.outputDiv.innerHTML += '<div style="color:var(--diff-del-text); padding:1rem; font-weight:bold; border:1px solid var(--diff-del-text); margin-top:1rem;">⚠️ Calculation Timed Out. Please simplify your keywords.</div>';
+    },
+
+    setLoading(active) {
+        this.isLoading = active;
+        const bar = document.getElementById('loading-bar');
+        if (bar) {
+            if (active) bar.classList.add('active');
+            else bar.classList.remove('active');
+        }
+    },
+
+    finishState() {
+        clearTimeout(this.timer);
+        this.setLoading(false);
+    }
+};
+
 /**
  * Fallback Engine: Runs on main thread when Web Workers are unavailable.
- * CAUTION: Keep logic synced with js/worker.js
+ * CAUTION: CRITICAL! Keep logic synced with js/worker.js.
+ * This engine runs only when Web Workers are unavailable (e.g. file:// protocol).
  */
 const FallbackEngine = {
     buildMatchers(keywordsValue) {
@@ -47,6 +232,7 @@ const FallbackEngine = {
                     search = search.substring(6).trim();
                     if (!search) return;
                 }
+                // Placeholder to protect [or] during regex escaping
                 const ESCAPED_OR_PLACEHOLDER = '\uFFFF';
                 let tempSearch = search.split('\\[or]').join(ESCAPED_OR_PLACEHOLDER);
                 const segments = tempSearch.split(/\s*\[or\]\s*/);
@@ -208,165 +394,5 @@ const FallbackEngine = {
         }
 
         return { html: resultParts.join(''), countM, countR };
-    }
-};
-
-TMS.WorkerManager = {
-    worker: null,
-    timer: null,
-    currentId: 0,
-    isLoading: false,
-    useFallback: false,
-
-    init() {
-        if (window.location.protocol === 'file:') {
-            this.useFallback = true;
-            TMS.UIManager.showToast('Running in local mode (No Worker).', 'info');
-            console.warn('Worker disabled due to file:// protocol. Using FallbackEngine.');
-            return;
-        }
-        try {
-            if (this.worker) this.worker.terminate();
-            this.worker = new Worker('js/worker.js');
-            this.worker.onmessage = this.handleMessage.bind(this);
-            this.worker.onerror = (e) => {
-                console.error('Worker Error:', e);
-                this.useFallback = true;
-                this.finishState();
-                TMS.UIManager.showToast('Worker failed. Switching to Sync mode.', 'error');
-            };
-        } catch (e) {
-            this.useFallback = true;
-            console.error('Worker Init Failed:', e);
-            TMS.UIManager.showToast('Worker initialization failed. Switching to Sync mode.', 'error');
-        }
-    },
-
-    processText() {
-        if (!TMS.STATE.isSynced) return;
-
-        const sourceText = TMS.EL.sourceInput.value;
-        const keywordsValue = TMS.EL.keywordsInput.value;
-
-        if (!sourceText) {
-            TMS.EL.outputDiv.innerHTML = '';
-            TMS.EL.countMatch.textContent = '0';
-            TMS.EL.countReplace.textContent = '0';
-            TMS.UIManager.updateActionButtonsState();
-            return;
-        }
-
-        this.postMessage(sourceText, keywordsValue);
-    },
-
-    postMessage(sourceText, keywordsValue) {
-        // Aggressive Termination
-        if (this.isLoading && this.worker) {
-            this.worker.terminate();
-            this.worker = null;
-        }
-
-        if (!this.worker && !this.useFallback) this.init();
-
-        this.currentId++;
-        this.setLoading(true);
-
-        if (this.useFallback) {
-            setTimeout(() => {
-                try {
-                    const result = FallbackEngine.processText(sourceText, keywordsValue);
-                    this.handleMessage({ data: { id: this.currentId, status: 'success', ...result } });
-                } catch (e) {
-                    this.handleMessage({ data: { id: this.currentId, status: 'error', message: e.message } });
-                }
-            }, 10);
-            return;
-        }
-
-        if (this.timer) clearTimeout(this.timer);
-        this.timer = setTimeout(() => {
-            this.handleTimeout();
-        }, WORKER_CONFIG.TIMEOUT_MS);
-
-        this.worker.postMessage({
-            id: this.currentId,
-            sourceText,
-            keywordsValue
-        });
-    },
-
-    handleMessage(e) {
-        const { id, status, html, htmlChunks, countM, countR, message } = e.data;
-        if (id !== this.currentId) return;
-
-        clearTimeout(this.timer);
-
-        if (status === 'success') {
-            TMS.EL.countMatch.textContent = countM;
-            TMS.EL.countReplace.textContent = countR;
-            TMS.EL.outputDiv.innerHTML = '';
-            TMS.UIManager.updateActionButtonsState();
-
-            if (htmlChunks && htmlChunks.length > 0) {
-                this.renderChunks(htmlChunks, id);
-            } else if (html) {
-                TMS.EL.outputDiv.innerHTML = html;
-                this.setLoading(false);
-                TMS.UIManager.updateActionButtonsState();
-            } else {
-                this.setLoading(false);
-                TMS.UIManager.updateActionButtonsState();
-            }
-        } else {
-            this.setLoading(false);
-            TMS.UIManager.showToast(message || 'Unknown Error', 'error');
-        }
-    },
-
-    renderChunks(chunks, originId) {
-        let index = 0;
-        const total = chunks.length;
-
-        const renderNext = () => {
-            if (this.currentId !== originId) return;
-
-            TMS.EL.outputDiv.insertAdjacentHTML('beforeend', chunks[index]);
-            index++;
-
-            if (index < total) {
-                requestAnimationFrame(renderNext);
-            } else {
-                this.setLoading(false);
-                TMS.UIManager.updateActionButtonsState();
-            }
-        };
-        requestAnimationFrame(renderNext);
-    },
-
-    handleTimeout() {
-        this.worker.terminate();
-        this.worker = null;
-        this.setLoading(false);
-        TMS.UIManager.showToast('Search Timed Out (Too complex)', 'error');
-        TMS.EL.outputDiv.innerHTML += '<div style="color:var(--diff-del-text); padding:1rem; font-weight:bold; border:1px solid var(--diff-del-text); margin-top:1rem;">⚠️ Calculation Timed Out. Please simplify your keywords.</div>';
-    },
-
-    stopRendering() {
-        this.currentId++;
-        this.finishState();
-    },
-
-    setLoading(active) {
-        this.isLoading = active;
-        const bar = document.getElementById('loading-bar');
-        if (bar) {
-            if (active) bar.classList.add('active');
-            else bar.classList.remove('active');
-        }
-    },
-
-    finishState() {
-        clearTimeout(this.timer);
-        this.setLoading(false);
     }
 };
