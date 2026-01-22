@@ -72,7 +72,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Constants - immutable configuration values
     const CONFIG = {
-        MAX_FILE_SIZE: 0.5 * 1024 * 1024, // Limit uploads to 500KB
+        MAX_SOURCE_FILE_SIZE: 0.5 * 1024 * 1024,   // 500KB for Source Text
+        MAX_KEYWORDS_FILE_SIZE: 50 * 1024,         // 50KB for Keywords (~1000-2000 lines) to prevent freezing
         DEBOUNCE_DELAY: 150,            // ms to wait before searching after typing
         HISTORY_DEBOUNCE: 400           // ms to wait before saving undo snapshot
     };
@@ -601,9 +602,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return ALLOWED_EXTENSIONS.some(ext => lowerName.endsWith(ext));
     }
 
-    function readFileContent(file, callback) {
-        if (file.size > CONFIG.MAX_FILE_SIZE) {
-            return showToast(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+    function readFileContent(file, callback, maxSize = CONFIG.MAX_SOURCE_FILE_SIZE) {
+        if (file.size > maxSize) {
+            return showToast(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Limit is ${(maxSize / 1024 / 1024).toFixed(1)}MB.`);
         }
 
         // Strict Whitelist Validation
@@ -619,7 +620,7 @@ document.addEventListener('DOMContentLoaded', () => {
         r.readAsText(file);
     }
 
-    function handleFileUpload(input, area, display) {
+    function handleFileUpload(input, area, display, maxSize) {
         if (input.files[0]) {
             readFileContent(input.files[0], txt => {
                 if (display) display.textContent = input.files[0].name;
@@ -629,7 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     STATE.isKeywordsDirty = true;
                     setTimeout(syncBackdrop, 0); // Trigger highlighting update
                 }
-            });
+            }, maxSize);
         }
     }
 
@@ -857,7 +858,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /** Initializes Drag & Drop for file inputs */
     function initDragAndDrop() {
-        const handleDrop = (e, area, nameDisplay) => {
+        const handleDrop = (e, area, nameDisplay, maxSize) => {
             e.preventDefault();
             e.target.closest('.input-wrapper')?.classList.remove('drag-active');
 
@@ -870,14 +871,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         STATE.isKeywordsDirty = true;
                         setTimeout(syncBackdrop, 0);
                     }
-                });
+                }, maxSize);
             }
         };
 
         [
-            { el: EL.sourceInput, name: EL.fileNameSource },
-            { el: EL.keywordsInput, name: EL.fileNameKeywords }
-        ].forEach(({ el, name }) => {
+            { el: EL.sourceInput, name: EL.fileNameSource, limit: CONFIG.MAX_SOURCE_FILE_SIZE },
+            { el: EL.keywordsInput, name: EL.fileNameKeywords, limit: CONFIG.MAX_KEYWORDS_FILE_SIZE }
+        ].forEach(({ el, name, limit }) => {
             const wrap = el.closest('.input-wrapper');
             if (!wrap) return;
 
@@ -889,7 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
             wrap.addEventListener('dragleave', (e) => {
                 if (!wrap.contains(e.relatedTarget)) wrap.classList.remove('drag-active');
             });
-            wrap.addEventListener('drop', e => handleDrop(e, el, name));
+            wrap.addEventListener('drop', e => handleDrop(e, el, name, limit));
         });
     }
 
@@ -916,10 +917,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle file selection
     if (EL.uploadSource) {
-        EL.uploadSource.addEventListener('change', () => handleFileUpload(EL.uploadSource, EL.sourceInput, EL.fileNameSource));
+        EL.uploadSource.addEventListener('change', () => handleFileUpload(EL.uploadSource, EL.sourceInput, EL.fileNameSource, CONFIG.MAX_SOURCE_FILE_SIZE));
     }
     if (EL.uploadKeywords) {
-        EL.uploadKeywords.addEventListener('change', () => handleFileUpload(EL.uploadKeywords, EL.keywordsInput, EL.fileNameKeywords));
+        EL.uploadKeywords.addEventListener('change', () => handleFileUpload(EL.uploadKeywords, EL.keywordsInput, EL.fileNameKeywords, CONFIG.MAX_KEYWORDS_FILE_SIZE));
     }
 
     // 3. UI Controls (Theme, Font, Keywords Lock)
