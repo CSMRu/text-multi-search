@@ -3,20 +3,12 @@
  * Handles heavy regex processing off the main thread.
  */
 
+// Load shared utilities
+importScripts('core/utils.js');
+
 // Wraps logic to avoid global scope pollution within the worker
 (() => {
-    // --- Utilities ---
-
-    const htmlMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-
-    function escapeHtml(text) {
-        if (!text) return '';
-        return text.replace(/[&<>"']/g, (m) => htmlMap[m]);
-    }
-
-    function escapeRegExp(string) {
-        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
+    // Note: escapeHtml and escapeRegExp are now available via TMS.Utils
 
     // --- Core Logic ---
 
@@ -65,7 +57,7 @@
                     .filter(s => s.length > 0)
                     .map(s => {
                         let content = s.split(ESCAPED_OR_PLACEHOLDER).join('[or]');
-                        let p = escapeRegExp(content);
+                        let p = TMS.Utils.escapeRegExp(content);
                         p = p.replace(/\\\[(num|cjk)\\\]/g, (match, type) => {
                             wildcardOrder.push(type);
                             if (type === 'num') return '(\\d+)';
@@ -118,7 +110,7 @@
 
         if (matchers.length === 0) {
             return {
-                html: `<span class="diff-original">${escapeHtml(sourceText)}</span>`,
+                html: `<span class="diff-original">${TMS.Utils.escapeHtml(sourceText)}</span>`,
                 countM: 0,
                 countR: 0
             };
@@ -193,7 +185,7 @@
                     if (pRange.matcher.isReplacement && shouldPreserveNewline && !content.endsWith('\n') && trailingNewline) {
                         content += trailingNewline;
                     }
-                    resultParts.push(`<span class="${cls}">${escapeHtml(content)}</span>`);
+                    resultParts.push(`<span class="${cls}">${TMS.Utils.escapeHtml(content)}</span>`);
                     cursor = pRange.end;
                     priorityIdx++;
                     continue;
@@ -226,14 +218,14 @@
             if (bestIdx === -1) {
                 const nextTarget = (limit === Infinity) ? sourceText.length : limit;
                 if (nextTarget > cursor) {
-                    resultParts.push(`<span class="diff-original">${escapeHtml(sourceText.substring(cursor, nextTarget))}</span>`);
+                    resultParts.push(`<span class="diff-original">${TMS.Utils.escapeHtml(sourceText.substring(cursor, nextTarget))}</span>`);
                 }
                 cursor = nextTarget;
                 continue;
             }
 
             if (minIndex > cursor) {
-                resultParts.push(`<span class="diff-original">${escapeHtml(sourceText.substring(cursor, minIndex))}</span>`);
+                resultParts.push(`<span class="diff-original">${TMS.Utils.escapeHtml(sourceText.substring(cursor, minIndex))}</span>`);
             }
 
             const bestM = textMatchers[bestIdx];
@@ -241,12 +233,28 @@
             const content = getDisplayContent(bestM, bestData);
             const cls = bestM.isReplacement ? 'diff-replace' : 'diff-add';
             if (bestM.isReplacement) countR++; else countM++;
-            resultParts.push(`<span class="${cls}">${escapeHtml(content)}</span>`);
+            resultParts.push(`<span class="${cls}">${TMS.Utils.escapeHtml(content)}</span>`);
             cursor = minIndex + bestData.len;
         }
 
+        // Progressive Rendering: Return chunks instead of full string
+        const CHUNK_SIZE = 1000;
+        const htmlChunks = [];
+        let currentChunk = [];
+
+        for (let i = 0; i < resultParts.length; i++) {
+            currentChunk.push(resultParts[i]);
+            if (currentChunk.length >= CHUNK_SIZE) {
+                htmlChunks.push(currentChunk.join(''));
+                currentChunk = [];
+            }
+        }
+        if (currentChunk.length > 0) {
+            htmlChunks.push(currentChunk.join(''));
+        }
+
         return {
-            html: resultParts.join(''),
+            htmlChunks, // Return Array instead of String
             countM,
             countR
         };
