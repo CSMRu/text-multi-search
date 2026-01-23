@@ -1,4 +1,6 @@
-/* Component Styles: Buttons, Inputs, Toasts, Loading Bar */
+/* ==========================================================================
+   Text Multi Search - Component Styles
+   ========================================================================== */
 
 /* ==========================================================================
    Buttons
@@ -14,7 +16,7 @@
     background-color: transparent;
     color: var(--text-main);
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
     font-size: 0.875rem;
 }
 
@@ -47,17 +49,7 @@
 }
 
 /* Button Modifiers */
-.btn-primary {
-    background-color: var(--primary);
-    color: white;
-    border: none;
-    font-weight: 500;
-}
 
-.btn-primary:hover {
-    background-color: var(--primary-hover);
-    color: white;
-}
 
 .btn-sm {
     padding: 4px;
@@ -91,7 +83,7 @@
     cursor: pointer;
     padding: 0.4rem 0.6rem;
     height: 100%;
-    transition: background-color 0.2s;
+    transition: background-color var(--transition-fast);
     display: flex;
     align-items: center;
 }
@@ -109,12 +101,12 @@
 #btn-theme svg {
     width: 20px;
     height: 20px;
-    transition: transform 0.3s ease;
+    transition: transform var(--transition-normal) var(--transition-ease);
 }
 
 /* Lock Button Visual States */
 .btn-keywords-lock svg {
-    transition: transform 0.2s;
+    transition: transform var(--transition-fast);
 }
 
 .btn-keywords-lock.locked {
@@ -158,7 +150,7 @@ textarea {
     padding: 1rem;
     background-color: transparent;
     color: var(--text-main);
-    font-family: 'Consolas', 'Monaco', 'Courier New', 'Noto Sans JP', monospace;
+    font-family: var(--font-mono);
     font-size: var(--font-size-base);
     outline: none;
     line-height: 1.5;
@@ -174,7 +166,7 @@ textarea {
     width: 100%;
     height: 100%;
     padding: 1rem;
-    font-family: 'Consolas', 'Monaco', 'Courier New', 'Noto Sans JP', monospace;
+    font-family: var(--font-mono);
     font-size: var(--font-size-base);
     line-height: 1.5;
     white-space: pre-wrap;
@@ -235,7 +227,7 @@ textarea {
     z-index: var(--z-drop-overlay);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s ease;
+    transition: opacity var(--transition-fast) var(--transition-ease);
     border-radius: inherit;
 }
 
@@ -345,21 +337,6 @@ textarea {
 /* ==========================================================================
    Badges & Tags
    ========================================================================== */
-/* Character Count Badge */
-.char-count {
-    font-family: 'Inter', sans-serif;
-    font-size: 12.8px !important;
-    font-weight: 600;
-    line-height: 1.6;
-    color: var(--primary) !important;
-    background-color: var(--bg-app);
-    padding: 4px 9.6px;
-    border-radius: var(--radius-pill);
-    border: none;
-    min-width: 100px;
-    text-align: center;
-    display: inline-block;
-}
 
 /* Version Tag */
 .version-tag {
@@ -401,10 +378,6 @@ textarea {
     background-color: var(--diff-add-text);
 }
 
-.legend-item.del::before {
-    background-color: var(--diff-del-text);
-}
-
 .legend-item.replace::before {
     background-color: var(--diff-replace-text);
 }
@@ -431,11 +404,11 @@ textarea {
     grid-area: up;
 }
 
-#btn-prev-change {
+#btn-prev-match {
     grid-area: left;
 }
 
-#btn-next-change {
+#btn-next-match {
     grid-area: right;
 }
 
@@ -455,7 +428,7 @@ textarea {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast) var(--transition-ease);
     opacity: 0.8;
 }
 
@@ -520,7 +493,7 @@ textarea {
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
     z-index: 1000;
     opacity: 0;
-    transition: opacity 0.2s, visibility 0.2s, transform 0.2s;
+    transition: opacity var(--transition-fast), visibility var(--transition-fast), transform var(--transition-fast);
     transform: translateY(-5px);
     text-align: left;
     line-height: 1.5;
@@ -615,15 +588,15 @@ textarea {
     z-index: var(--z-loading);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease;
+    transition: opacity var(--transition-normal) var(--transition-ease);
 }
 
 .loading-bar.active {
     opacity: 1;
-    animation: loadingInfo 12s infinite linear;
+    animation: loadingBar 12s infinite linear;
 }
 
-@keyframes loadingInfo {
+@keyframes loadingBar {
     0% {
         background-position: 200% 0;
     }
@@ -639,7 +612,7 @@ textarea {
    ========================================================================== */
 .diff-content {
     padding: 1rem;
-    font-family: 'Consolas', 'Monaco', 'Courier New', 'Noto Sans JP', monospace;
+    font-family: var(--font-mono);
     font-size: var(--font-size-base);
     white-space: pre-wrap;
     line-height: 1.5;
@@ -675,4 +648,13 @@ textarea {
 /* User-Edited Text Style */
 .diff-user {
     color: var(--diff-user-text);
+}
+
+/* Timeout Warning message */
+.timeout-warning {
+    color: var(--diff-del-text);
+    padding: 1rem;
+    font-weight: bold;
+    border: 1px solid var(--diff-del-text);
+    margin-top: 1rem;
 }

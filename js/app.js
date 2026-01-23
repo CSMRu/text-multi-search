@@ -5,6 +5,7 @@
  * 1. Initialize DOM Element References (TMS.EL)
  * 2. Initialize Feature Modules (Worker, File, etc.)
  * 3. Bind Event Listeners to UI interactions
+ * 4. Final Polish (Initial States & Icons)
  * 
  * Note: Core logic resides in `js/core` and `js/modules`.
  * This file acts as the coordinator (Controller).
@@ -27,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
         fileNameSource: document.getElementById('file-name-source'),
         uploadKeywords: document.getElementById('upload-keywords'),
         btnUploadKeywords: document.getElementById('btn-upload-keywords'),
-        fileNameKeywords: document.getElementById('file-name-keywords'),
 
         btnTheme: document.getElementById('btn-theme'),
         btnFontInc: document.getElementById('font-increase'),
@@ -41,7 +41,15 @@ document.addEventListener('DOMContentLoaded', () => {
         btnDownloadResult: document.getElementById('btn-download-result'),
 
         countMatch: document.getElementById('count-match'),
-        countReplace: document.getElementById('count-replace')
+        countReplace: document.getElementById('count-replace'),
+
+        loadingBar: document.getElementById('loading-bar'),
+        toastContainer: document.getElementById('toast-container'),
+
+        btnScrollTop: document.getElementById('btn-scroll-top'),
+        btnScrollBottom: document.getElementById('btn-scroll-bottom'),
+        btnPrevMatch: document.getElementById('btn-prev-match'),
+        btnNextMatch: document.getElementById('btn-next-match')
     };
 
     /* ==========================================================================
@@ -50,17 +58,16 @@ document.addEventListener('DOMContentLoaded', () => {
        ========================================================================== */
     TMS.WorkerManager.init();
 
-    // Define File Handler Callbacks
+    if (window.lucide) window.lucide.createIcons();
+
     const handleSourceLoad = (name, content) => {
-        TMS.EL.fileNameSource.textContent = name;
+        if (TMS.EL.fileNameSource) TMS.EL.fileNameSource.textContent = name;
         TMS.EL.sourceInput.value = content;
         TMS.WorkerManager.scheduleProcessing();
     };
 
     const handleKeywordsLoad = (name, content) => {
-        TMS.EL.fileNameKeywords.textContent = name;
         TMS.EL.keywordsInput.value = content;
-        TMS.STATE.isKeywordsDirty = true;
         TMS.WorkerManager.scheduleProcessing();
         TMS.UIManager.syncBackdrop();
     };
@@ -87,7 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
     TMS.EL.sourceInput.addEventListener('input', () => TMS.WorkerManager.scheduleProcessing());
 
     TMS.EL.keywordsInput.addEventListener('input', () => {
-        TMS.STATE.isKeywordsDirty = true;
         TMS.WorkerManager.scheduleProcessing();
         TMS.UIManager.syncBackdrop();
     });
@@ -111,10 +117,10 @@ document.addEventListener('DOMContentLoaded', () => {
         TMS.FileManager.handleFileUpload(TMS.EL.uploadKeywords, TMS.CONFIG.MAX_KEYWORDS_FILE_SIZE, handleKeywordsLoad));
 
     // --- Toolbar & Actions ---
-    if (TMS.EL.btnTheme) TMS.EL.btnTheme.addEventListener('click', TMS.UIManager.toggleTheme);
+    if (TMS.EL.btnTheme) TMS.EL.btnTheme.addEventListener('click', () => TMS.UIManager.toggleTheme());
     if (TMS.EL.btnFontInc) TMS.EL.btnFontInc.addEventListener('click', () => TMS.UIManager.updateFontSize(1));
     if (TMS.EL.btnFontDec) TMS.EL.btnFontDec.addEventListener('click', () => TMS.UIManager.updateFontSize(-1));
-    if (TMS.EL.btnKeywordsLock) TMS.EL.btnKeywordsLock.addEventListener('click', TMS.UIManager.toggleKeywordsLock);
+    if (TMS.EL.btnKeywordsLock) TMS.EL.btnKeywordsLock.addEventListener('click', () => TMS.UIManager.toggleKeywordsLock());
 
     TMS.EL.btnCopySource.addEventListener('click', () => {
         navigator.clipboard.writeText(TMS.EL.sourceInput.value)
@@ -141,21 +147,17 @@ document.addEventListener('DOMContentLoaded', () => {
         TMS.STATE.isSynced = !TMS.STATE.isSynced;
 
         if (TMS.STATE.isSynced) {
-            TMS.EL.btnSyncToggle.innerHTML = '<i data-lucide="link"></i>';
+            TMS.UIManager.updateButtonIcon(TMS.EL.btnSyncToggle, 'link');
             TMS.EL.btnSyncToggle.title = 'Current: Auto-Sync (Click to Unlink)';
             TMS.EL.btnSyncToggle.classList.remove('active');
             TMS.EL.outputDiv.contentEditable = 'false';
-        } else {
-            TMS.EL.btnSyncToggle.innerHTML = '<i data-lucide="unlink"></i>';
-            TMS.EL.btnSyncToggle.title = 'Current: Manual Edit (Click to Link)';
-            TMS.EL.btnSyncToggle.classList.add('active');
-            TMS.EL.outputDiv.contentEditable = 'true';
-        }
-
-        if (TMS.STATE.isSynced) {
             TMS.EL.outputDiv.style.outline = 'none';
             TMS.WorkerManager.processText();
         } else {
+            TMS.UIManager.updateButtonIcon(TMS.EL.btnSyncToggle, 'unlink');
+            TMS.EL.btnSyncToggle.title = 'Current: Manual Edit (Click to Link)';
+            TMS.EL.btnSyncToggle.classList.add('active');
+            TMS.EL.outputDiv.contentEditable = 'true';
             TMS.WorkerManager.stopRendering();
             TMS.EL.outputDiv.focus();
             TMS.STATE.history.stack = [{ content: TMS.EL.outputDiv.innerHTML, cursor: 0 }];
@@ -163,15 +165,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         TMS.UIManager.updateActionButtonsState();
-        TMS.Utils.refreshIcons();
     });
 
-    // --- Manual Edit Mode (Undo/Redo/Paste) ---
+    // --- Manual Edit Mode (Input Handling) ---
+    // Event order: beforeinput → keydown → input → paste
+
+    // Intercept text input to wrap in diff-user span (blue color for user edits)
+    TMS.EL.outputDiv.addEventListener('beforeinput', (e) => {
+        if (TMS.STATE.isSynced) return;
+        if (e.inputType === 'insertText' && e.data) {
+            e.preventDefault();
+            TMS.HistoryManager.insertUserText(e.data);
+            TMS.HistoryManager.debouncedSave();
+        }
+    });
+
+    // Handle Undo/Redo (Ctrl+Z) and Enter key
     TMS.EL.outputDiv.addEventListener('keydown', (e) => {
         if (TMS.STATE.isSynced) return;
 
         if (e.ctrlKey || e.metaKey) {
-            if (e.key === 'z') {
+            if (e.key.toLowerCase() === 'z') {
                 e.preventDefault();
                 if (e.shiftKey) TMS.HistoryManager.performAction(false); // Redo
                 else TMS.HistoryManager.performAction(true); // Undo
@@ -181,12 +195,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (e.key === 'Enter') {
             e.preventDefault();
-            TMS.HistoryManager.insertNodeAtCursor(document.createTextNode('\n'));
+            TMS.HistoryManager.insertUserText('\n');
         }
 
         TMS.HistoryManager.debouncedSave();
     });
 
+    // Save snapshot after input (debounced)
     TMS.EL.outputDiv.addEventListener('input', () => {
         if (!TMS.STATE.isSynced) {
             TMS.HistoryManager.debouncedSave();
@@ -194,19 +209,57 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Handle paste with diff-user styling
     TMS.EL.outputDiv.addEventListener('paste', (e) => {
         if (TMS.STATE.isSynced) return;
         e.preventDefault();
         const text = (e.clipboardData || window.clipboardData).getData('text');
-        TMS.HistoryManager.insertNodeAtCursor(document.createTextNode(text));
+        TMS.HistoryManager.insertUserText(text);
         TMS.HistoryManager.saveSnapshot();
     });
 
-    // --- Scroll Controls ---
-    const btnScrollTop = document.getElementById('btn-scroll-top');
-    const btnScrollBottom = document.getElementById('btn-scroll-bottom');
-    if (btnScrollTop) btnScrollTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    if (btnScrollBottom) btnScrollBottom.addEventListener('click', () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
+    // --- D-pad Navigation Controls ---
+    const addNavigationListener = (button, action) => {
+        if (!button) return;
+        button.addEventListener('click', () => {
+            button.blur();
+            action();
+        });
+    };
+
+    // Smooth Scroll
+    addNavigationListener(TMS.EL.btnScrollTop, () => TMS.UIManager.scrollToTop());
+    addNavigationListener(TMS.EL.btnScrollBottom, () => TMS.UIManager.scrollToBottom());
+
+    // Match Navigation
+    addNavigationListener(TMS.EL.btnNextMatch, () => TMS.UIManager.navigateMatch('next'));
+    addNavigationListener(TMS.EL.btnPrevMatch, () => TMS.UIManager.navigateMatch('prev'));
+
+    // Keyboard Shortcuts (Arrow Keys & WASD)
+    document.addEventListener('keydown', (e) => {
+        // Ignore if typing in inputs
+        const activeTag = document.activeElement.tagName.toLowerCase();
+        if (activeTag === 'textarea' || activeTag === 'input' || TMS.EL.outputDiv.isContentEditable) return;
+
+        const k = e.key.toLowerCase();
+
+        // Match Navigation (Left/Right)
+        if (k === 'arrowleft' || k === 'a') {
+            e.preventDefault();
+            TMS.UIManager.navigateMatch('prev');
+        } else if (k === 'arrowright' || k === 'd') {
+            e.preventDefault();
+            TMS.UIManager.navigateMatch('next');
+        }
+        // Scroll (Up/Down)
+        else if (k === 'arrowup' || k === 'w') {
+            e.preventDefault();
+            TMS.UIManager.scrollToTop();
+        } else if (k === 'arrowdown' || k === 's') {
+            e.preventDefault();
+            TMS.UIManager.scrollToBottom();
+        }
+    });
 
     /* ==========================================================================
        [4] Final Polish
@@ -218,4 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Set Version
     TMS.UIManager.setVersion(TMS.CONFIG.VERSION);
+
+    // Apply initial lock state to DOM
+    TMS.EL.keywordsInput.readOnly = TMS.STATE.isKeywordsLocked;
 });

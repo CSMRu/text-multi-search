@@ -44,7 +44,7 @@
                 <i data-lucide="arrow-right-from-line" style="width: 14px; height: 14px; opacity: 0.7;"></i>
             </a>
 
-            <!-- Font Control -->
+            <!-- Font Size Controls -->
             <div class="font-control-group">
                 <button id="font-decrease" class="btn-text" title="Decrease Font Size">
                     <span style="font-size: 10px; font-weight: bold;">A-</span>
@@ -57,7 +57,7 @@
 
             <div class="divider"></div>
 
-            <!-- Theme Toggle -->
+            <!-- Theme Toggle Button -->
             <button class="btn btn-icon btn-sm" id="btn-theme" title="Toggle Theme">
                 <i data-lucide="moon"></i>
             </button>
@@ -65,7 +65,7 @@
     </header>
 
     <main class="diff-container" id="main-container">
-        <!-- Input Group -->
+        <!-- Input Panels Section -->
         <div class="panel-group inputs">
             <!-- Source Text Panel -->
             <div class="panel input-panel">
@@ -145,7 +145,7 @@
                 <div class="input-wrapper">
                     <!-- Syntax Highlight Backdrop -->
                     <div id="keywords-backdrop" class="textarea-backdrop"></div>
-                    <textarea id="text-keywords"
+                    <textarea id="text-keywords" readonly
                         placeholder="Enter keywords (one per line)...&#10;Example:&#10;apple&#10;orange///fruit&#10;/// comment"></textarea>
                     <!-- Drag & Drop Overlay -->
                     <div class="drop-overlay">
@@ -160,7 +160,7 @@
             </div>
         </div>
 
-        <!-- Output Group -->
+        <!-- Output Result Section -->
         <div class="panel output-panel">
             <div class="panel-header">
                 <div class="header-left">
@@ -195,14 +195,28 @@
         </div>
     </main>
 
-    <!-- Core & Modules -->
+    <!-- D-pad Navigation Controls -->
+    <div class="scroll-buttons">
+        <button class="btn-scroll" id="btn-scroll-top" title="Scroll to Top (↑ / W)">
+            <i data-lucide="arrow-up"></i>
+        </button>
+        <button class="btn-scroll" id="btn-prev-match" title="Previous Match (← / A)">
+            <i data-lucide="arrow-left"></i>
+        </button>
+        <button class="btn-scroll" id="btn-next-match" title="Next Match (→ / D)">
+            <i data-lucide="arrow-right"></i>
+        </button>
+        <button class="btn-scroll" id="btn-scroll-bottom" title="Scroll to Bottom (↓ / S)">
+            <i data-lucide="arrow-down"></i>
+        </button>
+    </div>
+
+    <!-- Core Logic & Modules -->
     <script src="js/core/config.js"></script>
     <script src="js/core/utils.js"></script>
-    <script src="js/modules/uiManager.js"></script>
-    <script src="js/modules/fileManager.js"></script>
-    <script src="js/modules/historyManager.js"></script>
-    <script src="js/modules/workerManager.js"></script>
-    <!-- App Entry -->
+    <script src="js/core/engine.js"></script>
+    <script src="js/managers.js"></script>
+    <!-- Main Application Entry -->
     <script src="js/app.js"></script>
 </body>
 

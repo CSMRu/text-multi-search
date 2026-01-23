@@ -46,6 +46,15 @@
     --toolbar-height: 80px;
     --font-size-base: 16px;
 
+    /* Font Families */
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: 'Consolas', 'Monaco', 'Courier New', 'Noto Sans JP', monospace;
+
+    /* Transitions */
+    --transition-fast: 0.2s;
+    --transition-normal: 0.3s;
+    --transition-ease: ease;
+
     /* Z-Index Hierarchy */
     --z-drop-overlay: 20;
     --z-scroll-btn: 100;
@@ -109,4 +118,10 @@ body {
    ========================================================================== */
 .text-highlight {
     color: var(--primary) !important;
+}
+
+.flex-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }

@@ -8,7 +8,6 @@ const globalScope = typeof window !== 'undefined' ? window : self;
 globalScope.TMS = globalScope.TMS || {};
 globalScope.TMS.Utils = {};
 
-// HTML Entity Map
 const htmlMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
 
 /** Safely escapes text to prevent HTML injection */
@@ -39,8 +38,8 @@ TMS.Utils.isStyledSpan = function (el) {
 /** Calculates dynamic debounce delay based on text length */
 TMS.Utils.getSmartDebounceDelay = function (length) {
     if (!length) return TMS.CONFIG.DEBOUNCE_DELAY;
-    if (length < 5000) return 100;      // < 5KB: Very fast
-    if (length < 50000) return 300;     // < 50KB: Moderate
-    if (length < 200000) return 450;    // < 200KB: Slower
-    return 600;                      // Large: Slowest
+    if (length < 5000) return 100;
+    if (length < 50000) return 300;
+    if (length < 200000) return 450;
+    return 600;
 };

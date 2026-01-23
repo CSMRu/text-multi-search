@@ -1,93 +1,61 @@
 # Text Multi Search
-| <div align="center"> <a href="https://csmru.github.io/text-multi-search/"><img src="favicon.svg" width="128"></a> <br> [![Version](https://img.shields.io/badge/Version-26.0123b-B5E853?style=for-the-badge)](https://github.com/csmru/text-multi-search/commits) [![Hosted on GitHub Pages](https://img.shields.io/badge/GitHub-Pages-2b7346?style=for-the-badge&logo=github)](https://csmru.github.io/text-multi-search/) </div> |
+| <div align="center"> <a href="https://csmru.github.io/text-multi-search/"><img src="favicon.svg" width="64"></a> <br> [![Version](https://img.shields.io/badge/Version-26.0123c-B5E853?style=flat-square)](https://github.com/csmru/text-multi-search/commits) [![Hosted on GitHub Pages](https://img.shields.io/badge/GitHub-Pages-2b7346?style=flat-square&logo=github)](https://csmru.github.io/text-multi-search/) </div> |
 | :--- |
 
-> A powerful, client-side text analysis tool for searching, highlighting, and replacing multiple keywords simultaneously. Designed for developers and data analysts who need quick, visual text manipulation without leaving the browser.
+> **Client-side text processor** for simultaneous multi-keyword search, batch replacement, and pattern analysis.
 
-## Features
+## 🧩 Syntax Cheat Sheet
 
--   **⚡ Simultaneous Multi-Search**: Highlight hundreds of different keywords instantly with distinct colors.
--   **🔄 Batch Replacement**: Define `Search///Replace` rules to perform multiple substitutions in one pass.
--   **🗑️ Text Deletion**: Use `Search///[del]` syntax to remove matched text entirely.
--   **🧩 Advanced Pattern Matching**:
-    -   **Wildcards**: Built-in number wildcard `[num]` and CJK character wildcard `[cjk]` support.
--   **✏️ Manual Edit Mode**: Unlink the result to make manual corrections with a distinct blue highlight.
--   **🔒 100% Private**: All processing happens locally in your browser. No data is sent to any server.
--   **🌗 Light & Dark Mode**: Automatic theme detection with manual toggle.
+Enter each rule on a new line.
 
-## How to Use
-
-### 1. Basic Syntax
-Enter each rule on a new line. The most basic rule is a simple keyword search.
-
-| Syntax | Description | Example |
-| :--- | :--- | :--- |
-| `Keyword` | Highlights "Keyword" in the text. | `Error` |
-| `Search///Replace` | Replaces "Search" with "Replace". | `fix///fixed` |
-| `/// Comment` | Lines starting with `///` are ignored. | `/// This is a comment` |
-
-### 2. Advanced Reserved Words
-Unlock powerful text processing capabilities with these reserved keywords.
-
-| Keyword | Type | Description & Usage |
-| :--- | :--- | :--- |
-| **`[line]`** | **Selector** | **Line Mode**. Selects the *entire line* if it contains the following text.<br>• `[line]Error`: Highlights the whole line containing "Error".<br>• `[line]A///B`: Replaces the *whole line* containing "A" with "B". |
-| **`[del]`** | **Action** | **Deletion**. Use in the *Replacement* field to remove the match.<br>• `Key///[del]`: Removes the word "Key".<br>• `[line]Log///[del]`: deletes the *entire line* containing "Log". |
-| **`[or]`** | **Logic** | **Alternation**. Matches either the left OR right term.<br>• `apple[or]banana`: Matches "apple" or "banana".<br>• `[line]Err[or]Warn`: Matches lines containing "Err" OR "Warn". |
-| **`[num]`** | **Wildcard** | **Number**. Matches any sequence of digits (0-9).<br>• `User[num]`: Matches "User1", "User999".<br>• Captured automatically as a variable `$1`, `$2`... |
-| **`[cjk]`** | **Wildcard** | **Chinese characters**. Matches a single Chinese character.<br>• `[cjk]`: Matches "山", "田".<br>• Ranges: `\u4E00-\u9FFF` only. |
-
-### 3. Replacement Variables (Capture Groups)
-When using wildcards (`[num]`, `[cjk]`) in the search, their values are captured and can be reused in the replacement using `$1`, `$2`, etc.
-
-| Search Pattern | Replacement | Input Text | Output Text |
+| Keyword | Description | Example | Result |
 | :--- | :--- | :--- | :--- |
-| `Item [num]` | `Item #$1` | `Item 50` | `Item #50` |
-| `[cjk] matches` | `[$1]` | `山 matches` | `[山]` |
-| `[num] x [num]` | `$2 by $1` | `100 x 200` | `200 by 100` |
+| **`Text`** | **Basic Match**. Highlights text. | `Hello` | Highlights "Hello" |
+| **`A///B`** | **Replace**. Substitutes A with B. | `fix///fixed` | Replaces "fix" → "fixed" |
+| **`[line]`** | **Line Mode**. Selects entire line if match found. | `[line]Hello` | Selects whole line containing "Hello" |
+| **`[del]`** | **Delete**. Removes match (or line). | `[line]Log///[del]` | Deletes lines containing "Log" |
+| **`[or]`** | **Logic**. Match A OR B. | `App[or]Web` | Matches "App" or "Web" |
+| **`[num]`** | **Digits**. Captures numbers (`$1`). | `ID:[num]` | Matches "ID:123" |
+| **`[cjk]`** | **Chinese Characters**. Captures ideographs (`$1`). | `[cjk]` | Matches "山", "文" |
+| **`///`** | **Comment**. Ignored line. | `/// Title` | (Ignored) |
+
+### Replacement Variables
+Captured wildcards (`[num]`, `[cjk]`) can be used in replacement.
+*   `Item [num]///Item #$1` → "Item 10" becomes "Item #10"
+*   `[num]-[num]///$2.$1` → "2024-01" becomes "01.2024"
 
 ---
 
-## 🍳 Recipes (Useful Combinations)
+## ⚖️ Matching Priority (The 3 Laws)
 
-Here are some powerful combinations you can use right away:
+The engine scans the text in a **single pass**. If multiple rules could match the same part of the text, the winner is decided by these laws in order:
 
-### 🧹 Log Cleaning
-**Goal**: Remove all lines that are just "Info" or "Debug" logs, keeping only errors.
-```text
-[line]Info [or] Debug///[del]
-```
-> **Explanation**: Finds any line containing "Info" OR "Debug" and deletes the matched line entirely.
+0.  **`[line]` Mode (Super Law)**: Rules starting with `[line]` always take precedence over word-level rules. If a line matches, it is processed first as a whole.
+1.  **Leftmost First**: The match starting **earliest** in the text wins.
+    *   *Input:* `Banana` | *Rules:* `na`, `Ba` → **`Ba`** wins (starts at index 0).
+2.  **Longest First**: If start positions are identical, the **longer** match wins.
+    *   *Input:* `AppleJuice` | *Rules:* `Apple`, `AppleJuice` → **`AppleJuice`** wins (10 chars vs 5).
+3.  **First Defined**: If both position and length are identical, the rule defined **higher** in the list wins.
+    *   *Input:* `Test` | *Rules:* 1. `Test` 2. `Test///Done` → **1st rule** wins (Replacement fails).
 
-### 🆔 extracting IDs
-**Goal**: Turn a list of "User: ID12345 (Active)" into clean list of IDs "12345".
-```text
-[line]User: ID[num] (Active)///$1
-```
-> **Explanation**: `[line]` grabs the whole line. `[num]` captures the ID digits. The replacement `$1` replaces the *whole line* with just the captured number.
 
-### 🌐 CJK Isolation
-**Goal**: Wrap Chinese characters in brackets to find them easily.
-```text
-[cjk]///[$1]
-```
-> **Explanation**: Matches every single Chinese character and wraps it like `[山]`.
 
-### 🔄 Data Reformatting
-**Goal**: Change "Width: 1920, Height: 1080" to "1920x1080".
-```text
-Width: [num], Height: [num]///$1x$2
-```
-> **Explanation**: The first `[num]` is `$1`, the second is `$2`. We drop the text and just keep the numbers with an `x` separator.
+---
 
-### 2. Manual Editing
-Click the **Unlink** button (<i data-lucide="link"></i>) to switch to Edit Mode. You can now type directly in the result panel. Your manual changes will be highlighted in **Blue**.
+## ⚡ Common Patterns
 
-## Dependencies
+| Goal | Pattern Rule | Explanation |
+| :--- | :--- | :--- |
+| **Slim Logs** | `[line]Info [or] Debug///[del]` | Deletes Info/Debug lines to keep only Errors. |
+| **Mask Phone** | `010-[num]-[num]///010-****-$2` | Hide middle digits: `010-1234-5678` → `010-****-5678`. |
+| **Clean Terms** | `Signin[or]Log-in///Login` | Unify inconsistent terms into `Login`. |
+| **Extract IDs** | `[line]User_id: [num]///$1` | Replaces whole line with just the ID number. |
+| **Mask Name** | `[cjk][cjk][cjk]///$1*$3` | Hide middle Hanja: `金閣寺` → `金*寺`. |
+| **Format Data** | `[num]x[num]///W:$1 H:$2` | Reformat `1920x1080` → `W:1920 H:1080`. |
 
--   **[Lucide Icons](https://lucide.dev/)**: For beautiful, consistent iconography.
--   **[Google Fonts](https://fonts.google.com/)**: Inter & Noto Sans JP.
+## ⌨️ Shortcuts & Mode
+*   **Manual Edit**: Click <i data-lucide="unlink"></i> (Unlink) to type directly in the result.
+*   **Copy Source**: `Ctrl` + `Alt` + `C` (In Development).
 
 ## License
-
-This project is open source and available under the [MIT License](LICENSE).
+MIT License. [View Source](https://github.com/csmru/text-multi-search).
