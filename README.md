@@ -1,5 +1,5 @@
 # Text Multi Search
-| <div align="center"> <a href="https://csmru.github.io/text-multi-search/"><img src="favicon.svg" width="64"></a> <br> [![Version](https://img.shields.io/badge/Version-26.0123c-B5E853?style=flat-square)](https://github.com/csmru/text-multi-search/commits) [![Hosted on GitHub Pages](https://img.shields.io/badge/GitHub-Pages-2b7346?style=flat-square&logo=github)](https://csmru.github.io/text-multi-search/) </div> |
+| <div align="center"> <a href="https://csmru.github.io/text-multi-search/"><img src="favicon.svg" width="64"></a> <br> [![Version](https://img.shields.io/badge/Version-26.0123d-B5E853?style=flat-square)](https://github.com/csmru/text-multi-search/commits) [![Hosted on GitHub Pages](https://img.shields.io/badge/GitHub-Pages-2b7346?style=flat-square&logo=github)](https://csmru.github.io/text-multi-search/) </div> |
 | :--- |
 
 > **Client-side text processor** for simultaneous multi-keyword search, batch replacement, and pattern analysis.

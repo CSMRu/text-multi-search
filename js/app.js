@@ -235,11 +235,21 @@ document.addEventListener('DOMContentLoaded', () => {
     addNavigationListener(TMS.EL.btnNextMatch, () => TMS.UIManager.navigateMatch('next'));
     addNavigationListener(TMS.EL.btnPrevMatch, () => TMS.UIManager.navigateMatch('prev'));
 
-    // Keyboard Shortcuts (Arrow Keys & WASD)
+    // Global Keyboard Shortcuts (Esc, Arrow Keys, WASD)
     document.addEventListener('keydown', (e) => {
-        // Ignore if typing in inputs
-        const activeTag = document.activeElement.tagName.toLowerCase();
-        if (activeTag === 'textarea' || activeTag === 'input' || TMS.EL.outputDiv.isContentEditable) return;
+        const currentEl = document.activeElement;
+
+        // Escape: Unfocus input to enable WASD navigation
+        if (e.key === 'Escape') {
+            currentEl.blur();
+            return;
+        }
+
+        // Block shortcuts while in Input or Edit mode
+        const activeTag = currentEl.tagName.toLowerCase();
+        const isOutputFocused = (currentEl === TMS.EL.outputDiv);
+
+        if (activeTag === 'textarea' || activeTag === 'input' || isOutputFocused) return;
 
         const k = e.key.toLowerCase();
 
