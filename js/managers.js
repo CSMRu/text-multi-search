@@ -435,6 +435,16 @@ TMS.FileManager = {
         if (!file.name) return false;
         const lowerName = file.name.toLowerCase();
         return TMS.CONFIG.ALLOWED_EXTENSIONS.some(ext => lowerName.endsWith(ext));
+    },
+
+    downloadFile(content, filename) {
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
     }
 };
 

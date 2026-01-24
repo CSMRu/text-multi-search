@@ -133,13 +133,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     TMS.EL.btnDownloadResult.addEventListener('click', () => {
-        const blob = new Blob([TMS.EL.outputDiv.innerText], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'search-result.txt';
-        a.click();
-        URL.revokeObjectURL(url);
+        const timestamp = TMS.Utils.getFormattedTimestamp();
+        const filename = `tms-result_${timestamp}.txt`;
+        TMS.FileManager.downloadFile(TMS.EL.outputDiv.innerText, filename);
     });
 
     // --- Sync Toggle (Mode Switch) ---

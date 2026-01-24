@@ -43,3 +43,15 @@ TMS.Utils.getSmartDebounceDelay = function (length) {
     if (length < 200000) return 450;
     return 600;
 };
+
+/** Generates a timestamp string in YYMMDD-HHMM format */
+TMS.Utils.getFormattedTimestamp = function () {
+    const now = new Date();
+    const pad = (n) => n.toString().padStart(2, '0');
+    const yy = now.getFullYear().toString().slice(-2);
+    const mm = pad(now.getMonth() + 1);
+    const dd = pad(now.getDate());
+    const hh = pad(now.getHours());
+    const min = pad(now.getMinutes());
+    return `${yy}${mm}${dd}-${hh}${min}`;
+};
