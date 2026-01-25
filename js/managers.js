@@ -256,7 +256,7 @@ TMS.UIManager = {
             const sepIdx = safeLine.indexOf('///');
             const highlightSearch = (str) => {
                 let s = str.replace(/^(\s*)(\[line\])/, '$1<span class="reserved">$2</span>');
-                return s.replace(/(\[(?:num|cjk|or)\])/g, '<span class="reserved">$1</span>');
+                return s.replace(/(\[(?:num|cjk|kor|or)\])/g, '<span class="reserved">$1</span>');
             };
 
             if (sepIdx === -1) {
@@ -272,9 +272,9 @@ TMS.UIManager = {
             if (replacePart.trim() === '[del]') {
                 replaceHi = replaceHi.replace(/\[del\]/, '<span class="reserved">[del]</span>');
             } else {
-                replaceHi = replaceHi.replace(/(\[(?:num|cjk)\])/g, '<span class="reserved">$1</span>');
+                replaceHi = replaceHi.replace(/(\[(?:num|cjk|kor)\])/g, '<span class="reserved">$1</span>');
                 const isLineStart = searchPart.trim().startsWith('[line]');
-                const hasWildcards = /\[(?:num|cjk)\]/.test(searchPart);
+                const hasWildcards = /\[(?:num|cjk|kor)\]/.test(searchPart);
                 if (isLineStart && !hasWildcards) {
                     replaceHi = replaceHi.replace(/(\[line\])/g, '<span class="reserved">$1</span>');
                 }

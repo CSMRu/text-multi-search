@@ -1,5 +1,5 @@
 # Text Multi Search
-| <div align="center"> <a href="https://csmru.github.io/text-multi-search/"><img src="favicon.svg" width="64"></a> <br> [![Version](https://img.shields.io/badge/Version-26.0124a-B5E853?style=flat-square)](https://github.com/csmru/text-multi-search/commits) [![Hosted on GitHub Pages](https://img.shields.io/badge/GitHub-Pages-2b7346?style=flat-square&logo=github)](https://csmru.github.io/text-multi-search/) </div> |
+| <div align="center"> <a href="https://csmru.github.io/text-multi-search/"><img src="favicon.svg" width="64"></a> <br> [![Version](https://img.shields.io/badge/Version-26.0125a-B5E853?style=flat-square)](https://github.com/csmru/text-multi-search/commits) [![Hosted on GitHub Pages](https://img.shields.io/badge/GitHub-Pages-2b7346?style=flat-square&logo=github)](https://csmru.github.io/text-multi-search/) </div> |
 | :--- |
 
 > **Client-side text processor** for simultaneous multi-keyword search, batch replacement, and pattern analysis.
@@ -17,10 +17,11 @@ Enter each rule on a new line.
 | **`[or]`** | **Logic**. Match A OR B. | `App[or]Web` | Matches "App" or "Web" |
 | **`[num]`** | **Digits**. Captures numbers (`$1`). | `ID:[num]` | Matches "ID:123" |
 | **`[cjk]`** | **Chinese Characters**. Captures ideographs (`$1`). | `[cjk]` | Matches "山", "文" |
+| **`[kor]`** | **Korean characters**. Captures Korean char (`$1`). | `[kor]` | Matches "가", "힣", "ㄴ", "ㅟ" |
 | **`///`** | **Comment**. Ignored line. | `/// Title` | (Ignored) |
 
 ### Replacement Variables
-Captured wildcards (`[num]`, `[cjk]`) can be used in replacement.
+Captured wildcards (`[num]`, `[cjk]`, `[kor]`) can be used in replacement.
 *   `Item [num]///Item #$1` → "Item 10" becomes "Item #10"
 *   `[num]-[num]///$2.$1` → "2024-01" becomes "01.2024"
 

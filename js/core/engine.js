@@ -50,10 +50,11 @@
                     const processedSegments = segments.filter(s => s.length > 0).map(s => {
                         let content = s.split(OR_KEYWORD_PLACEHOLDER).join('[or]');
                         let p = TMS.Utils.escapeRegExp(content);
-                        p = p.replace(/\\\[(num|cjk)\\\]/g, (match, type) => {
+                        p = p.replace(/\\\[(num|cjk|kor)\\\]/g, (match, type) => {
                             wildcardOrder.push(type);
                             if (type === 'num') return '(\\d+)';
                             if (type === 'cjk') return '([\\u4E00-\\u9FFF])';
+                            if (type === 'kor') return '([\\uAC00-\\uD7A3\\u3130-\\u318F])';
                             return match;
                         });
                         return p;
@@ -64,7 +65,7 @@
                         replacePattern = replace.replace(/\$(?!\d)/g, () => '$$$$');
                         if (wildcardOrder.length > 0) {
                             let gIdx = 0;
-                            replacePattern = replacePattern.replace(/\[(num|cjk)\]/g, (m, type) =>
+                            replacePattern = replacePattern.replace(/\[(num|cjk|kor)\]/g, (m, type) =>
                                 (gIdx < wildcardOrder.length && wildcardOrder[gIdx] === type) ? `$${++gIdx}` : m
                             );
                         }
