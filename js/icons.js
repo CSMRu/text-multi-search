@@ -5,6 +5,7 @@
 (function () {
     const ICONS = {
         'arrow-right-from-line': '<path d="M3 5v14"/><path d="M21 12H7"/><path d="m15 18 6-6-6-6"/>',
+        'file-diff': '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M9 10h6" stroke="#4CAF50"/><path d="M12 13V7" stroke="#4CAF50"/><path d="M9 17h6" stroke="#F44336"/>',
         'arrow-up': '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
         'arrow-down': '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
         'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
