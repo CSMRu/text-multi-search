@@ -8,7 +8,7 @@ window.TMS = window.TMS || {};
 
 // 1. Immutable Configuration
 TMS.CONFIG = {
-    VERSION: 'v26.0125a',       // Application Version
+    VERSION: 'v26.0127a',       // Application Version
     MAX_SOURCE_FILE_SIZE: 0.5 * 1024 * 1024,   // 500KB for Source Text
     MAX_KEYWORDS_FILE_SIZE: 50 * 1024,         // 50KB for Keywords (~1000-2000 lines) to prevent freezing
     DEBOUNCE_DELAY: 150,            // ms to wait before searching after typing (default fallback)

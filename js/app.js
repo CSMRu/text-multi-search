@@ -166,12 +166,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Manual Edit Mode (Input Handling) ---
     // Event order: beforeinput → keydown → input → paste
 
-    // Intercept text input to wrap in diff-user span (blue color for user edits)
+    // Standard Input: Wrap text in blue span.
     TMS.EL.outputDiv.addEventListener('beforeinput', (e) => {
         if (TMS.STATE.isSynced) return;
         if (e.inputType === 'insertText' && e.data) {
             e.preventDefault();
             TMS.HistoryManager.insertUserText(e.data);
+            TMS.HistoryManager.debouncedSave();
+        }
+    });
+
+    // IME Start: Force blue span creation.
+    TMS.EL.outputDiv.addEventListener('compositionstart', () => {
+        if (!TMS.STATE.isSynced) {
+            TMS.HistoryManager.startComposition();
+        }
+    });
+
+    // IME End: Clean ZWS artifacts.
+    TMS.EL.outputDiv.addEventListener('compositionend', () => {
+        if (!TMS.STATE.isSynced) {
+            TMS.HistoryManager.cleanZeroWidth();
             TMS.HistoryManager.debouncedSave();
         }
     });

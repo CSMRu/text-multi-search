@@ -466,12 +466,88 @@ TMS.HistoryManager = {
         }
     },
 
-    insertUserText(text) {
+    startComposition() {
+        if (TMS.STATE.isSynced) return;
+        const sel = window.getSelection();
+        if (!sel.rangeCount) return;
+
+        const range = sel.getRangeAt(0);
+        let node = range.startContainer;
+        const parent = (node.nodeType === Node.TEXT_NODE) ? node.parentElement : node;
+
+        if (parent.classList && parent.classList.contains('diff-user')) {
+            return;
+        }
+
+        // IME entry point: inserts ZWS to anchor new diff-user span.
+        this._createAndInsertUserSpan('\u200B', true);
+    },
+
+    // Helper: Creates blue user span. optionally moves cursor inside (for IME).
+    _createAndInsertUserSpan(content, cursorInside) {
         const span = document.createElement('span');
         span.className = 'diff-user';
-        span.textContent = text;
+
+        const textNode = document.createTextNode(content);
+        span.appendChild(textNode);
+
         this.insertNodeAtCursor(span);
+
+        if (cursorInside) {
+            // Place cursor explicitly inside the new span (after ZWS)
+            const sel = window.getSelection();
+            const newRange = document.createRange();
+            newRange.setStart(textNode, 1);
+            newRange.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+        }
+
         TMS.UIManager.updateActionButtonsState();
+    },
+
+    // Cleanup: Removes ZWS (\u200B) preventing double-input issues.
+    cleanZeroWidth() {
+        const sel = window.getSelection();
+        if (!sel.rangeCount) return;
+
+        const range = sel.getRangeAt(0);
+        const node = range.startContainer;
+        const offset = range.startOffset;
+
+        // Helper to recursively clean text nodes
+        const cleanNode = (n) => {
+            if (n.nodeType === Node.TEXT_NODE) {
+                const text = n.nodeValue;
+                if (text.includes('\u200B')) {
+                    const zwsIndex = text.indexOf('\u200B');
+                    n.nodeValue = text.replace(/\u200B/g, '');
+
+                    // Adjust cursor if it was on or after ZWS in this node
+                    if (n === node && offset > zwsIndex) {
+                        const newOffset = Math.max(0, offset - 1);
+                        // Restore selection
+                        const newRange = document.createRange();
+                        newRange.setStart(n, newOffset);
+                        newRange.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(newRange);
+                    }
+                }
+            } else if (n.nodeType === Node.ELEMENT_NODE) {
+                n.childNodes.forEach(v => cleanNode(v));
+            }
+        };
+
+        // Clean specifically the diff-user span we are likely in
+        let target = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+        if (target.closest('.diff-user')) {
+            cleanNode(target.closest('.diff-user'));
+        }
+    },
+
+    insertUserText(text) {
+        this._createAndInsertUserSpan(text, false);
     },
 
     insertNodeAtCursor(node) {
