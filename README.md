@@ -2,6 +2,10 @@
 | <div align="center"> <a href="https://csmru.github.io/text-multi-search/"><img src="favicon.svg" width="64"></a> <br> [![Version](https://img.shields.io/badge/Version-26.0125a-B5E853?style=flat-square)](https://github.com/csmru/text-multi-search/commits) [![Hosted on GitHub Pages](https://img.shields.io/badge/GitHub-Pages-2b7346?style=flat-square&logo=github)](https://csmru.github.io/text-multi-search/) </div> |
 | :--- |
 
+
+
+[![English](https://img.shields.io/badge/Language-English-blue?style=flat-square&logo=google-translate&logoColor=blue)](README.md) [![한국어](https://img.shields.io/badge/Language-한국어-white?style=flat-square&logo=google-translate&logoColor=white)](README.ko.md)
+
 > **Client-side text processor** for simultaneous multi-keyword search, batch replacement, and pattern analysis.
 
 ## 🧩 Syntax Cheat Sheet
