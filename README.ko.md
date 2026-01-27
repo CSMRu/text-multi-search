@@ -1,5 +1,5 @@
 # Text Multi Search
-[![Version](https://img.shields.io/badge/Version-26.0127a-B5E853?style=flat-square)](https://github.com/csmru/text-multi-search/commits) [![Hosted on GitHub Pages](https://img.shields.io/badge/GitHub-Pages-2b7346?style=flat-square&logo=github)](https://csmru.github.io/text-multi-search/) [![English](https://img.shields.io/badge/Guide-English-white?style=flat-square&logo=google-translate&logoColor=white)](README.md) [![한국어](https://img.shields.io/badge/Guide-한국어-blue?style=flat-square&logo=google-translate&logoColor=blue)](README.ko.md)
+[![Version](https://img.shields.io/badge/Version-26.0127b-B5E853?style=flat-square)](https://github.com/csmru/text-multi-search/commits) [![Hosted on GitHub Pages](https://img.shields.io/badge/GitHub-Pages-2b7346?style=flat-square&logo=github)](https://csmru.github.io/text-multi-search/) [![English](https://img.shields.io/badge/Guide-English-white?style=flat-square&logo=google-translate&logoColor=white)](README.md) [![한국어](https://img.shields.io/badge/Guide-한국어-blue?style=flat-square&logo=google-translate&logoColor=blue)](README.ko.md)
 
 > 다중 키워드 동시 검색, 일괄 치환 및 패턴 분석을 위한 **클라이언트 측 텍스트 프로세서**입니다.
 

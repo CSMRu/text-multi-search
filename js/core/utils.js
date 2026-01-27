@@ -53,5 +53,6 @@ TMS.Utils.getFormattedTimestamp = function () {
     const dd = pad(now.getDate());
     const hh = pad(now.getHours());
     const min = pad(now.getMinutes());
-    return `${yy}${mm}${dd}-${hh}${min}`;
+    const ss = pad(now.getSeconds());
+    return `${yy}${mm}${dd}-${hh}${min}${ss}`;
 };

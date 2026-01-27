@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     TMS.EL.btnDownloadResult.addEventListener('click', () => {
         const timestamp = TMS.Utils.getFormattedTimestamp();
-        const filename = `tms-result_${timestamp}.txt`;
+        const filename = `tms-res_${timestamp}.txt`;
         TMS.FileManager.downloadFile(TMS.EL.outputDiv.innerText, filename);
     });
 
