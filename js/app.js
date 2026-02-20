@@ -135,7 +135,12 @@ document.addEventListener('DOMContentLoaded', () => {
     TMS.EL.btnDownloadResult.addEventListener('click', () => {
         const timestamp = TMS.Utils.getFormattedTimestamp();
         const filename = `tms-res_${timestamp}.txt`;
-        TMS.FileManager.downloadFile(TMS.EL.outputDiv.innerText, filename);
+        try {
+            TMS.FileManager.downloadFile(TMS.EL.outputDiv.innerText, filename);
+            TMS.UIManager.showToast('Result file downloaded!', 'success');
+        } catch (e) {
+            TMS.UIManager.showToast('Failed to download file', 'error');
+        }
     });
 
     // --- Sync Toggle (Mode Switch) ---
